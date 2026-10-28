@@ -55,6 +55,12 @@ function App() {
     }
   };
 
+  const handleProcessCleanup = async (olderThanDays) => {
+    const response = await axios.post(`${API_URL}/processes/cleanup`, { olderThanDays });
+    await fetchData();
+    return response.data.deletedCount;
+  };
+
   const handleProcessComplete = async (processId) => {
     try {
       const response = await axios.put(`${API_URL}/processes/${processId}/complete`);
@@ -168,6 +174,7 @@ function App() {
                     devices={devices}
                     onPatternUpdate={handlePatternUpdate}
                     onDeleteProcess={handleProcessDelete}
+                    onCleanupProcesses={handleProcessCleanup}
                     onCompleteProcess={handleProcessComplete}
                     onProcessUpdate={handleProcessUpdate}
                   />

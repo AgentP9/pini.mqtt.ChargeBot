@@ -7,6 +7,30 @@
   width: 100%;
 }
 
+.process-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.process-cleanup-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.process-cleanup-controls input {
+  width: 5rem;
+}
+
+.process-cleanup-message {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 900px) {
   .device-page {
     padding: 1rem;

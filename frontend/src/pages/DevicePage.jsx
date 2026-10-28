@@ -12,11 +12,14 @@ function DevicePage({
   devices,
   onPatternUpdate,
   onDeleteProcess, 
+  onCleanupProcesses,
   onCompleteProcess,
   onProcessUpdate
 }) {
   const [selectedProcesses, setSelectedProcesses] = useState([]);
   const [selectedPatternId, setSelectedPatternId] = useState(null);
+  const [cleanupDays, setCleanupDays] = useState(90);
+  const [cleanupMessage, setCleanupMessage] = useState('');
   const [filters, setFilters] = useState({
     state: 'all',
     charger: 'all',
@@ -166,6 +169,25 @@ function DevicePage({
     return onProcessUpdate(action, data);
   };
 
+  const handleCleanupProcesses = async () => {
+    if (!Number.isInteger(cleanupDays) || cleanupDays < 1 || cleanupDays > 36500) {
+      return;
+    }
+
+    if (!window.confirm(`Delete completed charging processes older than ${cleanupDays} days? Active processes and device recognition patterns will be kept.`)) {
+      return;
+    }
+
+    try {
+      const deletedCount = await onCleanupProcesses(cleanupDays);
+      setSelectedProcesses([]);
+      setCleanupMessage(`Deleted ${deletedCount} old completed process${deletedCount === 1 ? '' : 'es'}.`);
+    } catch (error) {
+      console.error('Error cleaning up charging processes:', error);
+      setCleanupMessage('Failed to clean up charging processes. Please try again.');
+    }
+  };
+
   return (
     <div className="device-page">
       <div className="dashboard-grid">
@@ -180,7 +202,32 @@ function DevicePage({
         </section>
 
         <section className="card processes-section">
-          <h2>Device Charging Processes</h2>
+          <div className="process-section-header">
+            <h2>Device Charging Processes</h2>
+            <div className="process-cleanup-controls">
+              <label htmlFor="cleanup-days">Delete completed processes older than</label>
+              <input
+                id="cleanup-days"
+                type="number"
+                min="1"
+                max="36500"
+                value={cleanupDays}
+                onChange={event => {
+                  setCleanupDays(Number(event.target.value));
+                  setCleanupMessage('');
+                }}
+              />
+              <span>days</span>
+              <button
+                type="button"
+                onClick={handleCleanupProcesses}
+                disabled={!Number.isInteger(cleanupDays) || cleanupDays < 1 || cleanupDays > 36500}
+              >
+                Cleanup
+              </button>
+            </div>
+          </div>
+          {cleanupMessage && <p className="process-cleanup-message" role="status">{cleanupMessage}</p>}
           <div className="filters-and-select-container">
             <ProcessFilters 
               filters={filters}
