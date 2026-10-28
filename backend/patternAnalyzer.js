@@ -403,12 +403,16 @@ function analyzePatterns(processes, existingPatterns = []) {
   patterns.forEach(pattern => {
     const durations = pattern.durations;
     durations.sort((a, b) => a - b);
+    const middleIndex = Math.floor(durations.length / 2);
+    const medianDuration = durations.length % 2 === 0
+      ? (durations[middleIndex - 1] + durations[middleIndex]) / 2
+      : durations[middleIndex];
     
     pattern.statistics = {
       averageDuration: parseFloat((durations.reduce((a, b) => a + b, 0) / durations.length).toFixed(2)),
       minDuration: parseFloat(Math.min(...durations).toFixed(2)),
       maxDuration: parseFloat(Math.max(...durations).toFixed(2)),
-      medianDuration: parseFloat(durations[Math.floor(durations.length / 2)].toFixed(2)),
+      medianDuration: parseFloat(medianDuration.toFixed(2)),
       totalSessions: pattern.count
     };
     
@@ -603,22 +607,29 @@ function mergePatterns(patterns, sourcePatternId, targetPatternId) {
   const targetWeight = oldTargetCount;
   const totalWeight = sourceWeight + targetWeight;
   
-  for (const key of PROFILE_KEYS) {
-    if (key === 'min') {
-      targetPattern.averageProfile[key] = Math.min(targetPattern.averageProfile[key], sourcePattern.averageProfile[key]);
-    } else if (key === 'max') {
-      targetPattern.averageProfile[key] = Math.max(targetPattern.averageProfile[key], sourcePattern.averageProfile[key]);
-    } else {
-      targetPattern.averageProfile[key] = parseFloat(
-        ((targetPattern.averageProfile[key] * targetWeight + sourcePattern.averageProfile[key] * sourceWeight) / totalWeight).toFixed(2)
+  if (!targetPattern.averageProfile && sourcePattern.averageProfile) {
+    targetPattern.averageProfile = {
+      ...sourcePattern.averageProfile,
+      curveShape: { ...sourcePattern.averageProfile.curveShape }
+    };
+  } else if (targetPattern.averageProfile && sourcePattern.averageProfile) {
+    for (const key of PROFILE_KEYS) {
+      if (key === 'min') {
+        targetPattern.averageProfile[key] = Math.min(targetPattern.averageProfile[key], sourcePattern.averageProfile[key]);
+      } else if (key === 'max') {
+        targetPattern.averageProfile[key] = Math.max(targetPattern.averageProfile[key], sourcePattern.averageProfile[key]);
+      } else {
+        targetPattern.averageProfile[key] = parseFloat(
+          ((targetPattern.averageProfile[key] * targetWeight + sourcePattern.averageProfile[key] * sourceWeight) / totalWeight).toFixed(2)
+        );
+      }
+    }
+
+    for (const phase of CURVE_PHASES) {
+      targetPattern.averageProfile.curveShape[phase] = parseFloat(
+        ((targetPattern.averageProfile.curveShape[phase] * targetWeight + sourcePattern.averageProfile.curveShape[phase] * sourceWeight) / totalWeight).toFixed(2)
       );
     }
-  }
-  
-  for (const phase of CURVE_PHASES) {
-    targetPattern.averageProfile.curveShape[phase] = parseFloat(
-      ((targetPattern.averageProfile.curveShape[phase] * targetWeight + sourcePattern.averageProfile.curveShape[phase] * sourceWeight) / totalWeight).toFixed(2)
-    );
   }
   
   // Update timestamps
@@ -649,6 +660,13 @@ function mergePatterns(patterns, sourcePatternId, targetPatternId) {
     // We cannot reliably compute a merged median without raw durations,
     // so set medianDuration to null to indicate it's unavailable after merging.
     targetPattern.statistics.medianDuration = null;
+  } else if (sourcePattern.statistics && !targetPattern.statistics) {
+    targetPattern.statistics = {
+      ...sourcePattern.statistics,
+      totalSessions: totalWeight
+    };
+  } else if (targetPattern.statistics) {
+    targetPattern.statistics.totalSessions = totalWeight;
   }
   
   // Remove source pattern

@@ -9,6 +9,7 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME:-}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_DEVICES=${MQTT_DEVICES:-Office Charger:shellies/shellyplug07,Kitchen Charger:shellies/shellyplug02}
+      - MQTT_APPLIANCES=${MQTT_APPLIANCES:-}
       - PORT=3000
       - DATA_DIR=/app/data
     volumes:
@@ -20,6 +21,7 @@ services:
       - "com.pinicharging.env.MQTT_USERNAME.description=MQTT broker username (optional)"
       - "com.pinicharging.env.MQTT_PASSWORD.description=MQTT broker password (optional)"
       - "com.pinicharging.env.MQTT_DEVICES.description=Device configs in format 'Name:topic' (e.g., Office Charger:shellies/plug07) or legacy format 'deviceId'"
+      - "com.pinicharging.env.MQTT_APPLIANCES.description=Appliance configs in format 'Name:topic' or 'Name:topic:notifyTopic' (optional)"
     restart: unless-stopped
     networks:
       - pini-network
