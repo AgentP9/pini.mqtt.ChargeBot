@@ -4,6 +4,7 @@ const mqtt = require('mqtt');
 const dotenv = require('dotenv');
 const storage = require('./storage');
 const patternAnalyzer = require('./patternAnalyzer');
+const { removeOldCompletedProcesses } = require('./processCleanup');
 const { parseApplianceConfig } = require('./applianceUtils');
 
 // Load environment variables
@@ -742,6 +743,33 @@ mqttClient.on('message', (topic, message) => {
 // Get all charging processes
 app.get('/api/processes', (req, res) => {
   res.json(chargingProcesses);
+});
+
+// Delete completed charger processes that started before the requested age cutoff
+app.post('/api/processes/cleanup', (req, res) => {
+  const { olderThanDays } = req.body;
+
+  if (!Number.isInteger(olderThanDays) || olderThanDays < 1 || olderThanDays > 36500) {
+    return res.status(400).json({ error: 'olderThanDays must be an integer between 1 and 36500' });
+  }
+
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+  const { remaining, removed } = removeOldCompletedProcesses(chargingProcesses, cutoff);
+  remaining.forEach((process, index) => {
+    chargingProcesses[index] = process;
+  });
+  chargingProcesses.length = remaining.length;
+
+  if (removed.length > 0) {
+    storage.saveProcesses(chargingProcesses);
+  }
+
+  console.log(`Cleaned up ${removed.length} old completed charging processes`);
+  res.json({
+    success: true,
+    deletedCount: removed.length,
+    cutoff: cutoff.toISOString()
+  });
 });
 
 // Get charging processes for a specific charger
