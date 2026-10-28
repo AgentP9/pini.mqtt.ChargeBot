@@ -58,4 +58,73 @@ assert.strictEqual(patterns.length, 2, 'opposite power trends should form separa
 assert(patterns.some(pattern => pattern.processIds.includes(rising.id)));
 assert(patterns.some(pattern => pattern.processIds.includes(falling.id)));
 
+function makeDurationProcess(id, durationMinutes) {
+  const process = makeProcess(id, [
+    { value: 20, minute: 0 },
+    { value: 50, minute: 1 },
+    { value: 80, minute: 2 }
+  ]);
+  const startTime = Date.UTC(2026, 1, id);
+  process.startTime = new Date(startTime).toISOString();
+  process.endTime = new Date(startTime + durationMinutes * 60 * 1000).toISOString();
+  process.events.forEach((event, index) => {
+    event.timestamp = new Date(startTime + index * 60 * 1000).toISOString();
+  });
+  return process;
+}
+
+const evenDurationPatterns = patternAnalyzer.analyzePatterns([
+  makeDurationProcess(10, 10),
+  makeDurationProcess(11, 20),
+  makeDurationProcess(12, 30),
+  makeDurationProcess(13, 40)
+], []);
+assert.strictEqual(evenDurationPatterns.length, 1);
+assert.strictEqual(evenDurationPatterns[0].statistics.medianDuration, 25);
+
+const manualTarget = {
+  id: 'manual-target',
+  count: 0,
+  processIds: [],
+  averageProfile: null,
+  statistics: null,
+  firstSeen: rising.startTime,
+  lastSeen: rising.endTime
+};
+const recognizedSource = {
+  id: 'recognized-source',
+  count: 1,
+  processIds: [rising.id],
+  averageProfile: risingProfile,
+  statistics: { averageDuration: 60, minDuration: 60, maxDuration: 60, medianDuration: 60, totalSessions: 1 },
+  firstSeen: rising.startTime,
+  lastSeen: rising.endTime
+};
+const targetMergePatterns = [manualTarget, recognizedSource];
+const targetMerge = patternAnalyzer.mergePatterns(
+  targetMergePatterns,
+  recognizedSource.id,
+  manualTarget.id
+);
+assert.strictEqual(targetMerge.success, true);
+assert.deepStrictEqual(targetMerge.mergedPattern.averageProfile, risingProfile);
+assert.strictEqual(targetMerge.mergedPattern.statistics.totalSessions, 1);
+
+const recognizedTarget = {
+  ...recognizedSource,
+  id: 'recognized-target',
+  processIds: [rising.id]
+};
+const manualSource = {
+  ...manualTarget,
+  id: 'manual-source'
+};
+const sourceMerge = patternAnalyzer.mergePatterns(
+  [recognizedTarget, manualSource],
+  manualSource.id,
+  recognizedTarget.id
+);
+assert.strictEqual(sourceMerge.success, true);
+assert.deepStrictEqual(sourceMerge.mergedPattern.averageProfile, risingProfile);
+
 console.log('Pattern identification tests passed');

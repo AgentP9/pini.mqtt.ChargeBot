@@ -826,10 +826,10 @@ app.get('/api/processes/:id', (req, res) => {
 
 // Delete a charging process
 app.delete('/api/processes/:id', (req, res) => {
-  const processId = parseInt(req.params.id);
+  const processId = Number(req.params.id);
   
   // Validate that the ID is a valid number
-  if (isNaN(processId)) {
+  if (!Number.isInteger(processId) || processId <= 0) {
     return res.status(400).json({ error: 'Invalid process ID' });
   }
   
@@ -851,10 +851,10 @@ app.delete('/api/processes/:id', (req, res) => {
 
 // Mark a charging process as complete (manually set endTime)
 app.put('/api/processes/:id/complete', (req, res) => {
-  const processId = parseInt(req.params.id);
+  const processId = Number(req.params.id);
   
   // Validate that the ID is a valid number
-  if (isNaN(processId)) {
+  if (!Number.isInteger(processId) || processId <= 0) {
     return res.status(400).json({ error: 'Invalid process ID' });
   }
   
