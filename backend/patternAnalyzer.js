@@ -44,7 +44,9 @@ function ensureDataDirectory() {
  * @returns {Object} Power profile characteristics
  */
 function calculatePowerProfile(process) {
-  const powerEvents = process.events.filter(e => e.type === 'power_consumption' && e.value > 0);
+  const powerEvents = process.events
+    .filter(e => e.type === 'power_consumption' && e.value > 0)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   
   // Require at least 3 power consumption events for reliable pattern analysis
   if (powerEvents.length < 3) {
@@ -169,12 +171,14 @@ function calculateProfileSimilarity(profile1, profile2) {
   
   // Compare mean power
   const meanDiff = Math.abs(profile1.mean - profile2.mean);
-  const meanSimilarity = Math.max(0, 1 - meanDiff / Math.max(profile1.mean, profile2.mean));
+  const maxMean = Math.max(profile1.mean, profile2.mean);
+  const meanSimilarity = maxMean === 0 ? 1 : Math.max(0, 1 - meanDiff / maxMean);
   totalSimilarity += meanSimilarity * weights.mean;
   
   // Compare median
   const medianDiff = Math.abs(profile1.median - profile2.median);
-  const medianSimilarity = Math.max(0, 1 - medianDiff / Math.max(profile1.median, profile2.median));
+  const maxMedian = Math.max(profile1.median, profile2.median);
+  const medianSimilarity = maxMedian === 0 ? 1 : Math.max(0, 1 - medianDiff / maxMedian);
   totalSimilarity += medianSimilarity * weights.median;
   
   // Compare standard deviation
@@ -204,10 +208,18 @@ function calculateProfileSimilarity(profile1, profile2) {
     profile2.curveShape.early, profile2.curveShape.middle, profile2.curveShape.late,
     1
   );
-  const curveSimilarity = Math.max(0, 1 - (earlyDiff + middleDiff + lateDiff) / (3 * maxCurveValue));
+  const trend1 = profile1.curveShape.late - profile1.curveShape.early;
+  const trend2 = profile2.curveShape.late - profile2.curveShape.early;
+  const significantTrend = Math.max(profile1.mean, profile2.mean, 1) * 0.1;
+  const oppositeTrends = trend1 * trend2 < 0 &&
+    Math.abs(trend1) >= significantTrend &&
+    Math.abs(trend2) >= significantTrend;
+  const curveSimilarity = oppositeTrends
+    ? 0
+    : Math.max(0, 1 - (earlyDiff + middleDiff + lateDiff) / (3 * maxCurveValue));
   totalSimilarity += curveSimilarity * weights.curveShape;
   
-  return parseFloat(totalSimilarity.toFixed(3));
+  return Number.isFinite(totalSimilarity) ? parseFloat(totalSimilarity.toFixed(3)) : 0;
 }
 
 /**
