@@ -4,6 +4,7 @@ const mqtt = require('mqtt');
 const dotenv = require('dotenv');
 const storage = require('./storage');
 const patternAnalyzer = require('./patternAnalyzer');
+const { parseApplianceConfig } = require('./applianceUtils');
 
 // Load environment variables
 dotenv.config();
@@ -31,6 +32,13 @@ const SAVE_THROTTLE_MS = 5000; // Save at most once every 5 seconds
 // Increased delay to provide more buffer time before turning off
 const AUTO_OFF_DELAY_MS = 10 * 60 * 1000; // 10 minutes in milliseconds (increased from 5)
 const AUTO_OFF_CHECK_INTERVAL_MS = 30000; // Check every 30 seconds
+
+// Appliance monitoring configuration (e.g., washing machines)
+// Appliances are never switched off automatically; only cycle start/end is detected
+const APPLIANCE_START_THRESHOLD_W = 10; // Watts above which a cycle is considered started
+const APPLIANCE_END_THRESHOLD_W = 10;   // Watts below which a cycle is considered ending
+const APPLIANCE_END_STABLE_MS = 5 * 60 * 1000; // Power must stay below threshold for 5 minutes to confirm cycle end
+const APPLIANCE_CHECK_INTERVAL_MS = 30000; // Check for cycle end every 30 seconds
 
 function scheduleSave() {
   if (saveTimer) {
@@ -77,6 +85,10 @@ function tryAutoAssignDeviceName(process, processId) {
 
 // Current state of each charger (physical charging device like ShellyPlug)
 const chargerStates = {};
+
+// Current state of each monitored appliance (e.g., washing machine)
+// Appliances are never switched off; cycles are detected by power threshold crossings
+const applianceStates = {};
 
 // Auto-off tracking for chargers
 // Tracks which chargers have auto-off enabled and their completion timers
@@ -250,15 +262,191 @@ const autoOffCheckInterval = setInterval(() => {
   });
 }, AUTO_OFF_CHECK_INTERVAL_MS);
 
+// ─── Appliance cycle detection ────────────────────────────────────────────────
+
+/**
+ * Start a new appliance cycle
+ * @param {string} applianceId - The appliance ID
+ * @param {string} timestamp - ISO timestamp
+ */
+function startApplianceCycle(applianceId, timestamp) {
+  const appliance = applianceStates[applianceId];
+  if (!appliance || appliance.isRunning) return;
+
+  const processId = processIdCounter++;
+  const newProcess = {
+    id: processId,
+    applianceId: applianceId,
+    applianceName: appliance.name,
+    processType: 'appliance',
+    startTime: timestamp,
+    endTime: null,
+    events: [
+      { timestamp, type: 'cycle_start', value: appliance.power }
+    ]
+  };
+
+  chargingProcesses.push(newProcess);
+  appliance.currentProcessId = processId;
+  appliance.isRunning = true;
+
+  storage.saveProcesses(chargingProcesses);
+  storage.saveProcessCounter(processIdCounter);
+
+  console.log(`Appliance "${appliance.name}" (${applianceId}): cycle started (process ${processId})`);
+}
+
+/**
+ * Publish an MQTT notification when an appliance cycle completes
+ * @param {string} applianceId - The appliance ID
+ * @param {Object} process - The completed process
+ */
+function publishCycleCompleteNotification(applianceId, process) {
+  const appliance = applianceStates[applianceId];
+  if (!appliance) return;
+
+  if (!mqttClient || !mqttClient.connected) {
+    console.error(`Appliance "${appliance.name}": Cannot send cycle-complete notification - MQTT not connected`);
+    return;
+  }
+
+  const durationMs = process.endTime
+    ? new Date(process.endTime).getTime() - new Date(process.startTime).getTime()
+    : 0;
+  const durationMinutes = parseFloat((durationMs / 1000 / 60).toFixed(1));
+
+  const payload = JSON.stringify({
+    event: 'cycle_complete',
+    applianceName: appliance.name,
+    applianceId: applianceId,
+    processId: process.id,
+    startTime: process.startTime,
+    endTime: process.endTime,
+    durationMinutes: durationMinutes
+  });
+
+  console.log(`Appliance "${appliance.name}": publishing cycle-complete notification to ${appliance.notifyTopic}`);
+
+  mqttClient.publish(appliance.notifyTopic, payload, { qos: 1, retain: false }, (err) => {
+    if (err) {
+      console.error(`Appliance "${appliance.name}": Failed to publish cycle-complete notification:`, err);
+    } else {
+      console.log(`Appliance "${appliance.name}": cycle-complete notification sent successfully`);
+    }
+  });
+}
+
+/**
+ * End an appliance cycle and publish the cycle-complete MQTT notification
+ * @param {string} applianceId - The appliance ID
+ */
+function endApplianceCycle(applianceId) {
+  const appliance = applianceStates[applianceId];
+  if (!appliance || !appliance.isRunning) return;
+
+  const processId = appliance.currentProcessId;
+  const process = chargingProcesses.find(p => p.id === processId);
+  const timestamp = new Date().toISOString();
+
+  if (process && !process.endTime) {
+    process.endTime = timestamp;
+    process.events.push({ timestamp, type: 'cycle_end', value: appliance.power });
+    storage.saveProcesses(chargingProcesses);
+    console.log(`Appliance "${appliance.name}" (${applianceId}): cycle ended (process ${processId})`);
+
+    publishCycleCompleteNotification(applianceId, process);
+  }
+
+  appliance.isRunning = false;
+  appliance.currentProcessId = null;
+  appliance.cycleEndDetectedAt = null;
+  if (appliance.cycleEndTimer) {
+    clearTimeout(appliance.cycleEndTimer);
+    appliance.cycleEndTimer = null;
+  }
+}
+
+/**
+ * Check whether an appliance cycle should end (power sustained below threshold)
+ * Called periodically via applianceCycleCheckInterval
+ * @param {string} applianceId - The appliance ID
+ */
+function checkApplianceCycleEnd(applianceId) {
+  const appliance = applianceStates[applianceId];
+
+  if (!appliance || !appliance.isRunning || appliance.currentProcessId === null) {
+    return;
+  }
+
+  const process = chargingProcesses.find(p => p.id === appliance.currentProcessId);
+  if (!process || process.endTime) {
+    return;
+  }
+
+  const powerIsLow = appliance.power < APPLIANCE_END_THRESHOLD_W;
+
+  if (powerIsLow) {
+    if (!appliance.cycleEndDetectedAt) {
+      // First time detecting low power – start the stable-period timer
+      appliance.cycleEndDetectedAt = Date.now();
+      console.log(`Appliance "${appliance.name}": low power detected (<${APPLIANCE_END_THRESHOLD_W}W), starting ${APPLIANCE_END_STABLE_MS / 60000}-minute end timer`);
+
+      appliance.cycleEndTimer = setTimeout(() => {
+        const current = applianceStates[applianceId];
+        if (current && current.isRunning && current.power < APPLIANCE_END_THRESHOLD_W) {
+          console.log(`Appliance "${appliance.name}": confirmed cycle end after stable low-power period`);
+          endApplianceCycle(applianceId);
+        } else {
+          console.log(`Appliance "${appliance.name}": power back above threshold during end timer – resetting`);
+          if (current) {
+            current.cycleEndDetectedAt = null;
+            current.cycleEndTimer = null;
+          }
+        }
+      }, APPLIANCE_END_STABLE_MS);
+    }
+  } else {
+    // Power is above threshold again – cancel any pending end timer
+    if (appliance.cycleEndDetectedAt) {
+      console.log(`Appliance "${appliance.name}": power back above threshold, cancelling end timer`);
+      if (appliance.cycleEndTimer) {
+        clearTimeout(appliance.cycleEndTimer);
+        appliance.cycleEndTimer = null;
+      }
+      appliance.cycleEndDetectedAt = null;
+    }
+  }
+}
+
+// Check appliance cycle end for all appliances periodically
+const applianceCycleCheckInterval = setInterval(() => {
+  Object.keys(applianceStates).forEach(applianceId => {
+    checkApplianceCycleEnd(applianceId);
+  });
+}, APPLIANCE_CHECK_INTERVAL_MS);
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 // Cleanup on shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, cleaning up...');
   if (autoOffCheckInterval) {
     clearInterval(autoOffCheckInterval);
   }
+  if (applianceCycleCheckInterval) {
+    clearInterval(applianceCycleCheckInterval);
+  }
   // Clear all auto-off timers
   Object.keys(autoOffState).forEach(chargerId => {
     disableAutoOff(chargerId);
+  });
+  // Clear all appliance end timers
+  Object.keys(applianceStates).forEach(applianceId => {
+    const appliance = applianceStates[applianceId];
+    if (appliance && appliance.cycleEndTimer) {
+      clearTimeout(appliance.cycleEndTimer);
+      appliance.cycleEndTimer = null;
+    }
   });
   process.exit(0);
 });
@@ -268,9 +456,20 @@ process.on('SIGINT', () => {
   if (autoOffCheckInterval) {
     clearInterval(autoOffCheckInterval);
   }
+  if (applianceCycleCheckInterval) {
+    clearInterval(applianceCycleCheckInterval);
+  }
   // Clear all auto-off timers
   Object.keys(autoOffState).forEach(chargerId => {
     disableAutoOff(chargerId);
+  });
+  // Clear all appliance end timers
+  Object.keys(applianceStates).forEach(applianceId => {
+    const appliance = applianceStates[applianceId];
+    if (appliance && appliance.cycleEndTimer) {
+      clearTimeout(appliance.cycleEndTimer);
+      appliance.cycleEndTimer = null;
+    }
   });
   process.exit(0);
 });
@@ -301,9 +500,14 @@ const parseChargerConfig = (configString) => {
 
 const MQTT_CHARGERS = parseChargerConfig(process.env.MQTT_DEVICES);
 
+const MQTT_APPLIANCES = parseApplianceConfig(process.env.MQTT_APPLIANCES);
+
 console.log('Starting backend server...');
 console.log('MQTT Broker:', MQTT_BROKER_URL);
 console.log('Configured chargers:', MQTT_CHARGERS.map(d => `${d.name} (${d.topic})`).join(', '));
+console.log('Configured appliances:', MQTT_APPLIANCES.length
+  ? MQTT_APPLIANCES.map(a => `${a.name} (${a.topic}) → notify: ${a.notifyTopic}`).join(', ')
+  : '(none)');
 
 // MQTT Client setup
 const mqttOptions = {
@@ -355,6 +559,30 @@ mqttClient.on('connect', () => {
       currentProcessId: null
     };
   });
+
+  // Subscribe to power topics for all configured appliances
+  MQTT_APPLIANCES.forEach(appliance => {
+    const powerTopic = `${appliance.topic}/relay/0/power`;
+    mqttClient.subscribe(powerTopic, (err) => {
+      if (err) {
+        console.error(`Failed to subscribe to ${powerTopic}:`, err);
+      } else {
+        console.log(`Subscribed to ${powerTopic} for appliance "${appliance.name}"`);
+      }
+    });
+
+    // Initialize appliance state
+    applianceStates[appliance.id] = {
+      name: appliance.name,
+      topic: appliance.topic,
+      notifyTopic: appliance.notifyTopic,
+      power: 0,
+      isRunning: false,
+      currentProcessId: null,
+      cycleEndDetectedAt: null,
+      cycleEndTimer: null
+    };
+  });
 });
 
 mqttClient.on('error', (error) => {
@@ -378,14 +606,23 @@ mqttClient.on('message', (topic, message) => {
       break;
     }
   }
+
+  // Find appliance by matching topic prefix
+  let applianceId = null;
+  for (const [id, state] of Object.entries(applianceStates)) {
+    if (topic.startsWith(state.topic + '/')) {
+      applianceId = id;
+      break;
+    }
+  }
   
-  if (!chargerId || !chargerConfig) {
-    console.warn(`Received message for unknown charger on topic: ${topic}`);
+  if (!chargerId && !applianceId) {
+    console.warn(`Received message for unknown charger or appliance on topic: ${topic}`);
     return;
   }
   
-  // Handle power on/off messages
-  if (topic.endsWith('/relay/0')) {
+  // Handle power on/off messages (chargers only)
+  if (chargerId && topic.endsWith('/relay/0')) {
     const isOn = messageStr.toLowerCase() === 'on' || messageStr === '1' || messageStr === 'true';
     
     if (isOn && !chargerStates[chargerId].isOn) {
@@ -444,8 +681,8 @@ mqttClient.on('message', (topic, message) => {
     }
   }
   
-  // Handle power consumption messages
-  if (topic.endsWith('/power')) {
+  // Handle power consumption messages (chargers)
+  if (chargerId && topic.endsWith('/power')) {
     const power = parseFloat(messageStr);
     
     if (!isNaN(power)) {
@@ -464,6 +701,36 @@ mqttClient.on('message', (topic, message) => {
           
           // Schedule a throttled save
           scheduleSave();
+        }
+      }
+    }
+  }
+
+  // Handle power messages for appliances (cycle detection based on power threshold)
+  if (applianceId && topic.endsWith('/power')) {
+    const power = parseFloat(messageStr);
+
+    if (!isNaN(power)) {
+      applianceStates[applianceId].power = power;
+
+      // Detect cycle start: power exceeds threshold while no cycle is running
+      if (!applianceStates[applianceId].isRunning && power >= APPLIANCE_START_THRESHOLD_W) {
+        startApplianceCycle(applianceId, timestamp);
+      }
+
+      // Record power consumption event while a cycle is running
+      if (applianceStates[applianceId].isRunning) {
+        const processId = applianceStates[applianceId].currentProcessId;
+        if (processId !== null) {
+          const process = chargingProcesses.find(p => p.id === processId);
+          if (process) {
+            process.events.push({
+              timestamp: timestamp,
+              type: 'power_consumption',
+              value: power
+            });
+            scheduleSave();
+          }
         }
       }
     }
@@ -879,8 +1146,74 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     mqttConnected: mqttClient.connected,
     chargers: MQTT_CHARGERS,
+    appliances: MQTT_APPLIANCES,
     timestamp: new Date().toISOString()
   });
+});
+
+// Appliance Monitoring Endpoints
+
+// Get all appliance states
+app.get('/api/appliances', (req, res) => {
+  const appliances = Object.entries(applianceStates).map(([id, state]) => ({
+    id,
+    name: state.name,
+    topic: state.topic,
+    notifyTopic: state.notifyTopic,
+    power: state.power,
+    isRunning: state.isRunning,
+    currentProcessId: state.currentProcessId
+  }));
+  res.json(appliances);
+});
+
+// Get state of a specific appliance
+app.get('/api/appliances/:applianceId', (req, res) => {
+  const { applianceId } = req.params;
+  const state = applianceStates[applianceId];
+
+  if (!state) {
+    return res.status(404).json({ error: 'Appliance not found' });
+  }
+
+  res.json({
+    id: applianceId,
+    name: state.name,
+    topic: state.topic,
+    notifyTopic: state.notifyTopic,
+    power: state.power,
+    isRunning: state.isRunning,
+    currentProcessId: state.currentProcessId
+  });
+});
+
+// Get active process for a specific appliance
+app.get('/api/appliances/:applianceId/active-process', (req, res) => {
+  const { applianceId } = req.params;
+  const state = applianceStates[applianceId];
+
+  if (!state) {
+    return res.status(404).json({ error: 'Appliance not found' });
+  }
+
+  if (!state.currentProcessId) {
+    return res.json({ applianceId, isRunning: false, process: null });
+  }
+
+  const process = chargingProcesses.find(p => p.id === state.currentProcessId);
+  res.json({ applianceId, isRunning: state.isRunning, process: process || null });
+});
+
+// Get all processes (cycles) for a specific appliance
+app.get('/api/appliances/:applianceId/processes', (req, res) => {
+  const { applianceId } = req.params;
+
+  if (!applianceStates[applianceId]) {
+    return res.status(404).json({ error: 'Appliance not found' });
+  }
+
+  const processes = chargingProcesses.filter(p => p.applianceId === applianceId);
+  res.json(processes);
 });
 
 // Pattern Analysis Endpoints
@@ -1528,6 +1861,15 @@ function gracefulShutdown(signal) {
   storage.saveProcessCounter(processIdCounter);
   patternAnalyzer.savePatterns(chargingPatterns);
   storage.saveAutoOffState(autoOffState);
+
+  // Clear all appliance cycle-end timers
+  Object.keys(applianceStates).forEach(applianceId => {
+    const appliance = applianceStates[applianceId];
+    if (appliance && appliance.cycleEndTimer) {
+      clearTimeout(appliance.cycleEndTimer);
+      appliance.cycleEndTimer = null;
+    }
+  });
   
   // Close MQTT connection with timeout
   if (mqttClient && mqttClient.connected) {

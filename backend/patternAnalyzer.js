@@ -220,9 +220,11 @@ function calculateProfileSimilarity(profile1, profile2) {
 function analyzePatterns(processes, existingPatterns = []) {
   console.log(`Pattern analysis: Starting with ${processes.length} total processes`);
   
-  // Only analyze completed processes with power data
+  // Only analyze completed charger processes with power data
+  // (appliance processes use processType: 'appliance' and are excluded)
   const completedProcesses = processes.filter(p => 
     p.endTime && 
+    p.processType !== 'appliance' &&
     p.events.some(e => e.type === 'power_consumption')
   );
   

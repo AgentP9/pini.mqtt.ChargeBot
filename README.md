@@ -18,6 +18,7 @@ This application tracks charging sessions for your devices (iPhones, TonieBoxes,
 - **Power Consumption Logging**: Records power consumption data with timestamps
 - **AI-Powered Pattern Recognition**: Automatically identifies charged devices based on power consumption characteristics
 - **Device Label Management**: Edit, merge, and manage device labels for recognized charging patterns
+- **Appliance Monitoring**: Detects wash/dishwasher cycle start and end via power threshold — fires an MQTT notification when a cycle completes (no auto-off)
 - **Modern Responsive UI**: Web interface with real-time updates and interactive charts
 - **Dark Mode / Light Mode**: Toggle between dark and light themes with persistent preference
 - **Multi-Charger Support**: Monitor multiple chargers simultaneously
@@ -127,6 +128,9 @@ All configuration can be managed via environment variables (through `.env` file 
 - `MQTT_DEVICES`: Charger configurations in the format `Name:topic` or legacy format `chargerId`
   - New format: `Office Charger:shellies/shellyplug07,Kitchen:shellies/shellyplug02`
   - Legacy format (backward compatible): `shellyplug-s-12345,shellyplug-s-67890`
+- `MQTT_APPLIANCES`: Appliance configurations for devices like washing machines (optional)
+  - Format: `Name:topic` or `Name:topic:notifyTopic`
+  - Example: `Washing Machine:shellies/washer,Dishwasher:shellies/dish:home/alerts/done`
 
 ### MQTT Topics
 
@@ -138,6 +142,51 @@ Example for charger configured as "Office Charger:shellies/shellyplug07":
 - Subscribes to: `shellies/shellyplug07/relay/0` - Receives "on" or "off"
 - Subscribes to: `shellies/shellyplug07/relay/0/power` - Receives power value (e.g., "15.5")
 - Displays as: "Office Charger" in the UI
+
+## Appliance Monitoring
+
+The application supports monitoring appliances like washing machines or dishwashers. Unlike chargers, appliances are **never switched off** — instead, the system detects when a cycle starts and ends based on power consumption changes, then fires an MQTT notification.
+
+### How Appliance Monitoring Works
+
+1. **Cycle Start**: When the appliance's power consumption rises to or above **10 W**, a cycle is recorded as started.
+2. **Cycle End Detection**: When power drops below **10 W** and stays there for **5 minutes**, the cycle is confirmed as ended.
+3. **MQTT Notification**: On cycle end, a JSON message is published to the configured notification topic.
+
+### Notification Payload
+
+```json
+{
+  "event": "cycle_complete",
+  "applianceName": "Washing Machine",
+  "applianceId": "shellies_washer",
+  "processId": 42,
+  "startTime": "2024-01-01T08:00:00.000Z",
+  "endTime": "2024-01-01T09:30:00.000Z",
+  "durationMinutes": 90.0
+}
+```
+
+### Configuring Appliances
+
+Add appliances to your `.env` file using `MQTT_APPLIANCES`:
+
+```env
+# Single washing machine (notify topic defaults to shellies/washer/notify)
+MQTT_APPLIANCES=Washing Machine:shellies/washer
+
+# Multiple appliances with custom notify topics
+MQTT_APPLIANCES=Washing Machine:shellies/washer:home/laundry/done,Dishwasher:shellies/dish:home/kitchen/done
+```
+
+The backend subscribes to `{topic}/relay/0/power` for each appliance.
+
+### Appliance API Endpoints
+
+- `GET /api/appliances` - List all configured appliances and their current state
+- `GET /api/appliances/:id` - Get state of a specific appliance
+- `GET /api/appliances/:id/active-process` - Get the currently running cycle
+- `GET /api/appliances/:id/processes` - Get all recorded cycles for an appliance
 
 ## Pattern Recognition
 
