@@ -22,4 +22,10 @@ const reconnected = recoverChargerStates(chargers, sessions, previous);
 assert.equal(reconnected.a.currentProcessId, 12);
 assert.equal(reconnected.a.power, 30);
 assert.equal(reconnected.a.relayConfirmed, false);
+const staleRuntime = { a: { isOn: true, power: 30, currentProcessId: 999 } };
+assert.equal(recoverChargerStates(chargers, sessions, staleRuntime).a.currentProcessId, 12,
+  'stale runtime session must not override persisted open session');
+const closedOnly = recoverChargerStates(chargers, sessions.filter(p => p.endTime), staleRuntime);
+assert.equal(closedOnly.a.currentProcessId, null,
+  'closed sessions must not be resurrected');
 console.log('MQTT session recovery regression tests passed');
