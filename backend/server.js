@@ -19,7 +19,7 @@ app.use(express.json());
 
 // Persistent storage for charging processes
 // Load existing processes from file
-const { recoverChargerStates, relayAction } = require('./mqttRecovery');
+const { recoverChargerStates, recoverApplianceStates, relayAction } = require('./mqttRecovery');
 const chargingProcesses = storage.loadProcesses();
 let processIdCounter = Math.max(
   storage.loadProcessCounter(),
@@ -389,7 +389,7 @@ function endApplianceCycle(applianceId) {
 function checkApplianceCycleEnd(applianceId) {
   const appliance = applianceStates[applianceId];
 
-  if (!appliance || !appliance.isRunning || appliance.currentProcessId === null) {
+  if (!appliance || !appliance.telemetryConfirmed || !appliance.isRunning || appliance.currentProcessId === null) {
     return;
   }
 
@@ -532,6 +532,7 @@ mqttClient.on('connect', () => {
   });
 
   // Subscribe to power topics for all configured appliances
+  const recoveredAppliances = recoverApplianceStates(MQTT_APPLIANCES, chargingProcesses, applianceStates);
   MQTT_APPLIANCES.forEach(appliance => {
     const powerTopic = `${appliance.topic}/relay/0/power`;
     mqttClient.subscribe(powerTopic, (err) => {
@@ -542,20 +543,7 @@ mqttClient.on('connect', () => {
       }
     });
 
-    // Preserve an in-memory appliance cycle across broker reconnects.
-    // A restart still requires a separate appliance recovery policy.
-    const previous = applianceStates[appliance.id];
-    applianceStates[appliance.id] = {
-      name: appliance.name,
-      topic: appliance.topic,
-      notifyTopic: appliance.notifyTopic,
-      power: previous?.power ?? 0,
-      isRunning: previous?.isRunning ?? false,
-      currentProcessId: previous?.currentProcessId ?? null,
-      cycleEndDetectedAt: null,
-      cycleEndTimer: null
-    };
-    if (previous?.cycleEndTimer) clearTimeout(previous.cycleEndTimer);
+    applianceStates[appliance.id] = recoveredAppliances[appliance.id];
   });
 });
 
@@ -699,6 +687,7 @@ mqttClient.on('message', (topic, message) => {
 
     if (!isNaN(power)) {
       applianceStates[applianceId].power = power;
+      applianceStates[applianceId].telemetryConfirmed = true;
 
       // Detect cycle start: power exceeds threshold while no cycle is running
       if (!applianceStates[applianceId].isRunning && power >= APPLIANCE_START_THRESHOLD_W) {
