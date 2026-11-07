@@ -20,8 +20,10 @@ jobs:
       - run: npm ci
       - run: node --check server.js
       - run: node --check storage.js
+      - run: node ../tests/test-process-integrity.js
+      - run: node ../tests/test-backup-rotation.js
+      - run: node --check recovery-cli.js
       - run: node ../tests/test-storage-failures.js
-      - run: node --check server.js
       - run: node --check mqttRecovery.js
       - run: node ../tests/test-mqtt-recovery.js
       - run: node ../tests/test-energy-integration.mjs

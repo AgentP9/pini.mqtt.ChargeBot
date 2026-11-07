@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const { validateProcesses } = require('./processIntegrity');
+const { rotateBackup } = require('./processBackups');
 
 // Data directory for persistent storage
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -27,12 +29,13 @@ function loadProcesses() {
   try {
     if (fs.existsSync(PROCESSES_FILE)) {
       const data = fs.readFileSync(PROCESSES_FILE, 'utf8');
-      const processes = JSON.parse(data);
+      const processes = validateProcesses(JSON.parse(data));
       console.log(`Loaded ${processes.length} charging processes from storage`);
       return processes;
     }
   } catch (error) {
-    console.error('Error loading processes from file:', error);
+    console.error('Fatal: cannot load persisted processes without risking data loss:', error);
+    throw error;
   }
   
   return [];
@@ -46,9 +49,12 @@ function saveProcesses(processes) {
   ensureDataDirectory();
   
   try {
+    validateProcesses(processes);
     // Write to a temporary file first, then rename for atomic operation
     const tempFile = `${PROCESSES_FILE}.tmp`;
     fs.writeFileSync(tempFile, JSON.stringify(processes, null, 2), 'utf8');
+    // Rotate validated snapshots; never replace a corrupt primary silently.
+    rotateBackup(PROCESSES_FILE);
     fs.renameSync(tempFile, PROCESSES_FILE);
     console.log(`Saved ${processes.length} charging processes to storage`);
   } catch (error) {

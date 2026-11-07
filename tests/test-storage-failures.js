@@ -6,7 +6,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'chargebot-storage-'));
 process.env.DATA_DIR = temp;
 const storage = require('../backend/storage');
 try {
-  storage.saveProcesses([{ id: 1, events: [] }]);
+  storage.saveProcesses([{ id: 1, startTime: '2026-01-01T00:00:00Z', endTime: null, events: [] }]);
   assert.equal(storage.loadProcesses()[0].id, 1);
   storage.saveAutoOffState({ charger: { enabled: true, revalidationTimer: {} } });
   assert.deepEqual(storage.loadAutoOffState(), { charger: { enabled: true } });
