@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatDateTime } from '../utils/dateFormatter';
-import { calculateProcessEnergyWh } from '../utils/energy';
+import { calculateProcessEnergyWh } from '../utils/energy.mjs';
 import './StatisticsPage.css';
 
 function StatisticsPage({ processes, patterns, devices }) {
