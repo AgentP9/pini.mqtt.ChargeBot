@@ -19,6 +19,7 @@ app.use(express.json());
 
 // Persistent storage for charging processes
 // Load existing processes from file
+const { recoverChargerStates, recoverApplianceStates, relayAction, parseRelayState } = require('./mqttRecovery');
 const chargingProcesses = storage.loadProcesses();
 let processIdCounter = Math.max(
   storage.loadProcessCounter(),
@@ -189,12 +190,12 @@ function checkAutoOff(chargerId) {
   const chargerState = chargerStates[chargerId];
 
   // Skip if auto-off not enabled or charger not found
-  if (!autoOff || !autoOff.enabled || !chargerState) {
+  if (!mqttClient.connected || !autoOff || !autoOff.enabled || !chargerState) {
     return;
   }
 
   // Skip if charger is off or no active process
-  if (!chargerState.isOn || chargerState.currentProcessId === null) {
+  if (!chargerState.isOn || !chargerState.relayConfirmed || chargerState.currentProcessId === null) {
     // Clear any pending timers if charger is off
     if (autoOff.revalidationTimer) {
       clearTimeout(autoOff.revalidationTimer);
@@ -388,7 +389,7 @@ function endApplianceCycle(applianceId) {
 function checkApplianceCycleEnd(applianceId) {
   const appliance = applianceStates[applianceId];
 
-  if (!appliance || !appliance.isRunning || appliance.currentProcessId === null) {
+  if (!mqttClient.connected || !appliance || !appliance.telemetryConfirmed || !appliance.isRunning || appliance.currentProcessId === null) {
     return;
   }
 
@@ -503,6 +504,7 @@ mqttClient.on('connect', () => {
     state.completionDetectedAt = null;
   });
   
+  const recoveredStates = recoverChargerStates(MQTT_CHARGERS, chargingProcesses, chargerStates);
   MQTT_CHARGERS.forEach(charger => {
     // Subscribe to power on/off topic
     const powerTopic = `${charger.topic}/relay/0`;
@@ -526,16 +528,11 @@ mqttClient.on('connect', () => {
     
     // Initialize charger state with unique ID and name only once.
     // A reconnect must not silently orphan a running session.
-    chargerStates[charger.id] = {
-      name: charger.name,
-      topic: charger.topic,
-      isOn: false,
-      power: 0,
-      currentProcessId: null
-    };
+    chargerStates[charger.id] = recoveredStates[charger.id];
   });
 
   // Subscribe to power topics for all configured appliances
+  const recoveredAppliances = recoverApplianceStates(MQTT_APPLIANCES, chargingProcesses, applianceStates);
   MQTT_APPLIANCES.forEach(appliance => {
     const powerTopic = `${appliance.topic}/relay/0/power`;
     mqttClient.subscribe(powerTopic, (err) => {
@@ -546,17 +543,7 @@ mqttClient.on('connect', () => {
       }
     });
 
-    // Initialize appliance state
-    applianceStates[appliance.id] = {
-      name: appliance.name,
-      topic: appliance.topic,
-      notifyTopic: appliance.notifyTopic,
-      power: 0,
-      isRunning: false,
-      currentProcessId: null,
-      cycleEndDetectedAt: null,
-      cycleEndTimer: null
-    };
+    applianceStates[appliance.id] = recoveredAppliances[appliance.id];
   });
 });
 
@@ -565,6 +552,16 @@ mqttClient.on('close', () => {
     if (state.revalidationTimer) clearTimeout(state.revalidationTimer);
     state.revalidationTimer = null;
     state.completionDetectedAt = null;
+  });
+  // Fail closed immediately on disconnect, not only after reconnect.
+  Object.values(chargerStates).forEach(state => {
+    state.relayConfirmed = false;
+  });
+  Object.values(applianceStates).forEach(state => {
+    state.telemetryConfirmed = false;
+    state.cycleEndDetectedAt = null;
+    if (state.cycleEndTimer) clearTimeout(state.cycleEndTimer);
+    state.cycleEndTimer = null;
   });
 });
 
@@ -606,9 +603,18 @@ mqttClient.on('message', (topic, message) => {
   
   // Handle power on/off messages (chargers only)
   if (chargerId && topic.endsWith('/relay/0')) {
-    const isOn = messageStr.toLowerCase() === 'on' || messageStr === '1' || messageStr === 'true';
+    const isOn = parseRelayState(messageStr);
+    if (isOn === null) {
+      console.warn(`Ignoring invalid relay payload on ${topic}: ${messageStr}`);
+      return;
+    }
     
-    if (isOn && !chargerStates[chargerId].isOn) {
+    const action = relayAction(chargerStates[chargerId], isOn);
+    chargerStates[chargerId].relayConfirmed = true;
+    if (action === 'resume') {
+      chargerStates[chargerId].isOn = true;
+      console.log(`Resumed charging process ${chargerStates[chargerId].currentProcessId} on charger "${chargerConfig.name}"`);
+    } else if (action === 'start') {
       // Start new charging process
       const processId = processIdCounter++;
       const newProcess = {
@@ -637,7 +643,7 @@ mqttClient.on('message', (topic, message) => {
       storage.saveProcessCounter(processIdCounter);
       
       console.log(`Started charging process ${processId} on charger "${chargerConfig.name}"`);
-    } else if (!isOn && chargerStates[chargerId].isOn) {
+    } else if (action === 'end') {
       // End current charging process
       const processId = chargerStates[chargerId].currentProcessId;
       const process = chargingProcesses.find(p => p.id === processId);
@@ -666,14 +672,14 @@ mqttClient.on('message', (topic, message) => {
   
   // Handle power consumption messages (chargers)
   if (chargerId && topic.endsWith('/power')) {
-    const power = parseFloat(messageStr);
+    const power = Number(messageStr.trim());
     
-    if (!isNaN(power)) {
+    if (messageStr.trim() !== '' && Number.isFinite(power) && power >= 0) {
       chargerStates[chargerId].power = power;
       
       // Add to current process if one is active
       const processId = chargerStates[chargerId].currentProcessId;
-      if (processId !== null) {
+      if (processId !== null && chargerStates[chargerId].relayConfirmed && chargerStates[chargerId].isOn) {
         const process = chargingProcesses.find(p => p.id === processId);
         if (process) {
           process.events.push({
@@ -691,10 +697,11 @@ mqttClient.on('message', (topic, message) => {
 
   // Handle power messages for appliances (cycle detection based on power threshold)
   if (applianceId && topic.endsWith('/power')) {
-    const power = parseFloat(messageStr);
+    const power = Number(messageStr.trim());
 
-    if (!isNaN(power)) {
+    if (messageStr.trim() !== '' && Number.isFinite(power) && power >= 0) {
       applianceStates[applianceId].power = power;
+      applianceStates[applianceId].telemetryConfirmed = true;
 
       // Detect cycle start: power exceeds threshold while no cycle is running
       if (!applianceStates[applianceId].isRunning && power >= APPLIANCE_START_THRESHOLD_W) {
@@ -1612,7 +1619,7 @@ app.get('/api/chargers/:chargerId/completion-status', (req, res) => {
   }
   
   // If charger is not on or has no active process, it's not in completion phase
-  if (!chargerState.isOn || chargerState.currentProcessId === null) {
+  if (!chargerState.isOn || !chargerState.relayConfirmed || chargerState.currentProcessId === null) {
     return res.json({
       chargerId: chargerId,
       isActive: false,
