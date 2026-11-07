@@ -19,7 +19,7 @@ app.use(express.json());
 
 // Persistent storage for charging processes
 // Load existing processes from file
-const { recoverChargerStates, recoverApplianceStates, relayAction } = require('./mqttRecovery');
+const { recoverChargerStates, recoverApplianceStates, relayAction, parseRelayState } = require('./mqttRecovery');
 const chargingProcesses = storage.loadProcesses();
 let processIdCounter = Math.max(
   storage.loadProcessCounter(),
@@ -603,7 +603,11 @@ mqttClient.on('message', (topic, message) => {
   
   // Handle power on/off messages (chargers only)
   if (chargerId && topic.endsWith('/relay/0')) {
-    const isOn = messageStr.toLowerCase() === 'on' || messageStr === '1' || messageStr === 'true';
+    const isOn = parseRelayState(messageStr);
+    if (isOn === null) {
+      console.warn(`Ignoring invalid relay payload on ${topic}: ${messageStr}`);
+      return;
+    }
     
     const action = relayAction(chargerStates[chargerId], isOn);
     chargerStates[chargerId].relayConfirmed = true;
