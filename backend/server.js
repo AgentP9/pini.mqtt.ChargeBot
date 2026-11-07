@@ -553,6 +553,16 @@ mqttClient.on('close', () => {
     state.revalidationTimer = null;
     state.completionDetectedAt = null;
   });
+  // Fail closed immediately on disconnect, not only after reconnect.
+  Object.values(chargerStates).forEach(state => {
+    state.relayConfirmed = false;
+  });
+  Object.values(applianceStates).forEach(state => {
+    state.telemetryConfirmed = false;
+    state.cycleEndDetectedAt = null;
+    if (state.cycleEndTimer) clearTimeout(state.cycleEndTimer);
+    state.cycleEndTimer = null;
+  });
 });
 
 mqttClient.on('error', (error) => {
