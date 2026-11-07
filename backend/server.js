@@ -3,6 +3,8 @@ const cors = require('cors');
 const mqtt = require('mqtt');
 const dotenv = require('dotenv');
 const storage = require('./storage');
+const { createEventJournal, autoOffDiagnosis } = require('./diagnostics');
+const diagnosticJournal = createEventJournal();
 const patternAnalyzer = require('./patternAnalyzer');
 const { removeOldCompletedProcesses } = require('./processCleanup');
 const { parseApplianceConfig } = require('./applianceUtils');
@@ -242,6 +244,7 @@ function checkAutoOff(chargerId) {
           if (stillCompleting && mqttClient && mqttClient.connected && currentProcess.events.some(e => e.type === 'power_consumption' && Date.now() - new Date(e.timestamp).getTime() >= 0 && Date.now() - new Date(e.timestamp).getTime() < 120000)) {
             console.log(`Auto-off: Revalidation confirmed completion for charger ${chargerId}, turning off`);
             turnOffCharger(chargerId);
+            diagnosticJournal.record('auto_off_command', { chargerId, processId: process.id });
             // Reset state
             autoOff.completionDetectedAt = null;
             autoOff.revalidationTimer = null;
@@ -496,6 +499,7 @@ const mqttClient = mqtt.connect(MQTT_BROKER_URL, mqttOptions);
 // Subscribe to topics for all configured chargers
 mqttClient.on('connect', () => {
   console.log('Connected to MQTT broker');
+  diagnosticJournal.record('mqtt_connected');
   // Clear runtime state after reconnect; retained relay state will establish the
   // current physical state. Never trust a pre-disconnect session for auto-off.
   Object.values(autoOffState).forEach(state => {
@@ -548,6 +552,7 @@ mqttClient.on('connect', () => {
 });
 
 mqttClient.on('close', () => {
+  diagnosticJournal.record('mqtt_disconnected');
   Object.values(autoOffState).forEach(state => {
     if (state.revalidationTimer) clearTimeout(state.revalidationTimer);
     state.revalidationTimer = null;
@@ -567,6 +572,7 @@ mqttClient.on('close', () => {
 
 mqttClient.on('error', (error) => {
   console.error('MQTT connection error:', error);
+  diagnosticJournal.record('mqtt_error', { message: error.message });
 });
 
 mqttClient.on('message', (topic, message) => {
@@ -606,10 +612,12 @@ mqttClient.on('message', (topic, message) => {
     const isOn = parseRelayState(messageStr);
     if (isOn === null) {
       console.warn(`Ignoring invalid relay payload on ${topic}: ${messageStr}`);
+      diagnosticJournal.record('invalid_relay_payload', { chargerId });
       return;
     }
     
     const action = relayAction(chargerStates[chargerId], isOn);
+    if (action !== 'none') diagnosticJournal.record('relay_transition', { chargerId, action, isOn });
     chargerStates[chargerId].relayConfirmed = true;
     if (action === 'resume') {
       chargerStates[chargerId].isOn = true;
@@ -1163,6 +1171,41 @@ app.get('/api/chargers/:chargerId/auto-off/status', (req, res) => {
     completionDetected: completionDetected,
     timeUntilShutoffSeconds: timeUntilShutoff
   });
+});
+
+// Diagnostic endpoints: bounded in-memory journal, no MQTT credentials or raw payloads.
+app.get('/api/diagnostics/events', (req, res) => {
+  const limit = Number(req.query.limit || 50);
+  const sinceId = Number(req.query.sinceId || 0);
+  res.json({ events: diagnosticJournal.list({
+    type: typeof req.query.type === 'string' ? req.query.type : undefined,
+    sinceId: Number.isSafeInteger(sinceId) && sinceId > 0 ? sinceId : undefined,
+    limit
+  }), ...diagnosticJournal.stats() });
+});
+
+app.get('/api/diagnostics/status', (req, res) => {
+  const now = Date.now();
+  const chargers = Object.entries(chargerStates).map(([id, state]) => {
+    const process = chargingProcesses.find(p => p.id === state.currentProcessId);
+    const sample = [...(process?.events || [])].reverse().find(e => e.type === 'power_consumption');
+    return {
+      id, name: state.name, relayConfirmed: Boolean(state.relayConfirmed),
+      isOn: Boolean(state.isOn), processId: process?.id ?? null,
+      autoOff: autoOffDiagnosis({
+        mqttConnected: mqttClient.connected, charger: state, autoOff: autoOffState[id],
+        process, lastPowerTimestamp: sample?.timestamp, now
+      })
+    };
+  });
+  const appliances = Object.entries(applianceStates).map(([id, state]) => ({
+    id, name: state.name, isRunning: Boolean(state.isRunning),
+    telemetryConfirmed: Boolean(state.telemetryConfirmed),
+    processId: state.currentProcessId ?? null
+  }));
+  res.json({ timestamp: new Date(now).toISOString(), mqttConnected: mqttClient.connected,
+    uptimeSeconds: Math.floor(process.uptime()), chargers, appliances,
+    journal: diagnosticJournal.stats() });
 });
 
 // Health check endpoint
