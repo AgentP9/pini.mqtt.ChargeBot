@@ -389,7 +389,7 @@ function endApplianceCycle(applianceId) {
 function checkApplianceCycleEnd(applianceId) {
   const appliance = applianceStates[applianceId];
 
-  if (!appliance || !appliance.telemetryConfirmed || !appliance.isRunning || appliance.currentProcessId === null) {
+  if (!mqttClient.connected || !appliance || !appliance.telemetryConfirmed || !appliance.isRunning || appliance.currentProcessId === null) {
     return;
   }
 
