@@ -23,9 +23,17 @@ try {
   assert.deepEqual(storage.loadProcesses(), []);
   storage.saveProcesses(valid);
   assert.deepEqual(storage.loadProcesses(), valid);
+  storage.saveProcesses([{ ...valid[0], id: 2 }]);
+  const backup = path.join(dir, 'charging-processes.json.bak');
+  assert.deepEqual(JSON.parse(fs.readFileSync(backup, 'utf8')), valid);
+  assert.deepEqual(storage.loadProcesses(), [{ ...valid[0], id: 2 }]);
   fs.writeFileSync(path.join(dir, 'charging-processes.json'), '{broken', 'utf8');
   assert.throws(() => storage.loadProcesses(), SyntaxError);
   assert.equal(fs.readFileSync(path.join(dir, 'charging-processes.json'), 'utf8'), '{broken');
+  assert.deepEqual(JSON.parse(fs.readFileSync(backup, 'utf8')), valid,
+    'corruption must not overwrite the last-known-good backup');
+  assert.throws(() => storage.saveProcesses(valid), SyntaxError,
+    'writing must not overwrite a corrupted primary without manual recovery');
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }
