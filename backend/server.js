@@ -5,6 +5,9 @@ const dotenv = require('dotenv');
 const storage = require('./storage');
 const { createEventJournal, autoOffDiagnosis } = require('./diagnostics');
 const diagnosticJournal = createEventJournal();
+const fs = require('node:fs');
+const path = require('node:path');
+const { listBackups } = require('./processBackups');
 const patternAnalyzer = require('./patternAnalyzer');
 const { removeOldCompletedProcesses } = require('./processCleanup');
 const { parseApplianceConfig } = require('./applianceUtils');
@@ -1203,8 +1206,14 @@ app.get('/api/diagnostics/status', (req, res) => {
     telemetryConfirmed: Boolean(state.telemetryConfirmed),
     processId: state.currentProcessId ?? null
   }));
+  const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
+  const primary = path.join(dataDir, 'charging-processes.json');
+  const backups = listBackups(primary).map(({ index, valid, count, modifiedAt, error }) =>
+    ({ index, valid, count, modifiedAt, error }));
   res.json({ timestamp: new Date(now).toISOString(), mqttConnected: mqttClient.connected,
     uptimeSeconds: Math.floor(process.uptime()), chargers, appliances,
+    persistence: { primaryExists: fs.existsSync(primary), backupCount: backups.length,
+      validBackups: backups.filter(b => b.valid).length, backups },
     journal: diagnosticJournal.stats() });
 });
 
