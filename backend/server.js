@@ -672,9 +672,9 @@ mqttClient.on('message', (topic, message) => {
   
   // Handle power consumption messages (chargers)
   if (chargerId && topic.endsWith('/power')) {
-    const power = parseFloat(messageStr);
+    const power = Number(messageStr.trim());
     
-    if (!isNaN(power)) {
+    if (messageStr.trim() !== '' && Number.isFinite(power) && power >= 0) {
       chargerStates[chargerId].power = power;
       
       // Add to current process if one is active
