@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { recoverChargerStates, relayAction } = require('../backend/mqttRecovery');
+const { recoverChargerStates, recoverApplianceStates, relayAction } = require('../backend/mqttRecovery');
 const chargers = [{ id: 'a', name: 'A', topic: 'shelly/a' }, { id: 'b', name: 'B', topic: 'shelly/b' }];
 const sessions = [
   { id: 11, chargerId: 'a', startTime: '2026-01-01T10:00:00Z', endTime: null },
@@ -28,4 +28,17 @@ assert.equal(recoverChargerStates(chargers, sessions, staleRuntime).a.currentPro
 const closedOnly = recoverChargerStates(chargers, sessions.filter(p => p.endTime), staleRuntime);
 assert.equal(closedOnly.a.currentProcessId, null,
   'closed sessions must not be resurrected');
-console.log('MQTT session recovery regression tests passed');
+const appliances = [{ id: 'washer', name: 'Washer', topic: 'washer', notifyTopic: 'done' }];
+const applianceHistory = [
+  { id: 20, processType: 'appliance', applianceId: 'washer', startTime: '2026-01-01T10:00:00Z', endTime: null },
+  { id: 21, processType: 'appliance', applianceId: 'washer', startTime: '2026-01-01T11:00:00Z', endTime: null }
+];
+const recoveredAppliance = recoverApplianceStates(appliances, applianceHistory).washer;
+assert.equal(recoveredAppliance.currentProcessId, 21);
+assert.equal(recoveredAppliance.isRunning, true);
+assert.equal(recoveredAppliance.telemetryConfirmed, false);
+assert.equal(recoveredAppliance.cycleEndDetectedAt, null);
+assert.equal(recoverApplianceStates(appliances, []).washer.isRunning, false);
+assert.equal(recoverApplianceStates(appliances, applianceHistory,
+  { washer: { currentProcessId: 999, power: 0, telemetryConfirmed: true } }).washer.currentProcessId, 21);
+console.log('MQTT charger and appliance recovery regression tests passed');
