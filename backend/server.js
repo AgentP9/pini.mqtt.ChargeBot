@@ -19,6 +19,7 @@ app.use(express.json());
 
 // Persistent storage for charging processes
 // Load existing processes from file
+const { recoverChargerStates, relayAction } = require('./mqttRecovery');
 const chargingProcesses = storage.loadProcesses();
 let processIdCounter = Math.max(
   storage.loadProcessCounter(),
@@ -503,6 +504,7 @@ mqttClient.on('connect', () => {
     state.completionDetectedAt = null;
   });
   
+  const recoveredStates = recoverChargerStates(MQTT_CHARGERS, chargingProcesses, chargerStates);
   MQTT_CHARGERS.forEach(charger => {
     // Subscribe to power on/off topic
     const powerTopic = `${charger.topic}/relay/0`;
@@ -526,13 +528,7 @@ mqttClient.on('connect', () => {
     
     // Initialize charger state with unique ID and name only once.
     // A reconnect must not silently orphan a running session.
-    chargerStates[charger.id] = {
-      name: charger.name,
-      topic: charger.topic,
-      isOn: false,
-      power: 0,
-      currentProcessId: null
-    };
+    chargerStates[charger.id] = recoveredStates[charger.id];
   });
 
   // Subscribe to power topics for all configured appliances
@@ -608,7 +604,12 @@ mqttClient.on('message', (topic, message) => {
   if (chargerId && topic.endsWith('/relay/0')) {
     const isOn = messageStr.toLowerCase() === 'on' || messageStr === '1' || messageStr === 'true';
     
-    if (isOn && !chargerStates[chargerId].isOn) {
+    const action = relayAction(chargerStates[chargerId], isOn);
+    chargerStates[chargerId].relayConfirmed = true;
+    if (action === 'resume') {
+      chargerStates[chargerId].isOn = true;
+      console.log(`Resumed charging process ${chargerStates[chargerId].currentProcessId} on charger "${chargerConfig.name}"`);
+    } else if (action === 'start') {
       // Start new charging process
       const processId = processIdCounter++;
       const newProcess = {
@@ -637,7 +638,7 @@ mqttClient.on('message', (topic, message) => {
       storage.saveProcessCounter(processIdCounter);
       
       console.log(`Started charging process ${processId} on charger "${chargerConfig.name}"`);
-    } else if (!isOn && chargerStates[chargerId].isOn) {
+    } else if (action === 'end') {
       // End current charging process
       const processId = chargerStates[chargerId].currentProcessId;
       const process = chargingProcesses.find(p => p.id === processId);
