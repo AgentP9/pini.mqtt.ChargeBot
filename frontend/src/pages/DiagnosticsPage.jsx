@@ -56,6 +56,14 @@ export default function DiagnosticsPage() {
         <div><span>Events retained</span><strong>{status?.journal?.count ?? '—'}</strong></div>
         <div><span>Last refresh</span><strong>{updated ? formatTime(updated) : '—'}</strong></div>
       </div>
+      <h3>Persistence</h3>
+      <div className="diagnostics-summary">
+        <div><span>Primary history</span><strong>{status?.persistence?.primaryExists ? 'Present' : 'Not created'}</strong></div>
+        <div><span>Backups</span><strong>{status?.persistence?.validBackups ?? '—'} valid / {status?.persistence?.backupCount ?? '—'} found</strong></div>
+      </div>
+      {status?.persistence?.backups?.some(backup => !backup.valid) && (
+        <p role="alert" className="diagnostics-error">One or more history backups are invalid. Inspect storage before recovery.</p>
+      )}
       <h3>Chargers</h3>
       <div className="diagnostics-grid">
         {status?.chargers?.length ? status.chargers.map(charger => (
