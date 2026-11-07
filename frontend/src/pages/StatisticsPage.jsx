@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatDateTime } from '../utils/dateFormatter';
+import { calculateProcessEnergyWh } from '../utils/energy.mjs';
 import './StatisticsPage.css';
 
 function StatisticsPage({ processes, patterns, devices }) {
@@ -20,15 +21,9 @@ function StatisticsPage({ processes, patterns, devices }) {
         }, 0) / completedWithDuration.length
       : 0;
     
-    // Total energy consumed (in Wh)
-    const totalEnergy = processes.reduce((sum, p) => {
-      if (p.measurements && Array.isArray(p.measurements)) {
-        const processEnergy = p.measurements.reduce((pSum, m) => pSum + (m.power || 0), 0) / 60; // Approximate Wh
-        return sum + processEnergy;
-      }
-      return sum;
-    }, 0);
-    
+    // Sum energy from timestamped MQTT samples (Wh).
+    const totalEnergy = processes.reduce((sum, p) => sum + calculateProcessEnergyWh(p), 0);
+
     // Device usage count (by pattern)
     const deviceUsage = {};
     patterns.forEach(pattern => {

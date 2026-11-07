@@ -703,59 +703,43 @@ function deletePattern(patterns, patternId) {
  * @param {number} stableMinutes - Number of minutes power must stay below threshold (default 10 minutes)
  * @returns {boolean} True if process appears to be in completion phase
  */
-function isInCompletionPhase(process, thresholdWatts = 5, stableMinutes = 10) {
-  if (!process || !process.events || process.endTime) {
-    return false;
+function isInCompletionPhase(process, thresholdWatts = 5, stableMinutes = 10, now = Date.now()) {
+  if (!process || !Array.isArray(process.events) || process.endTime ||
+      !Number.isFinite(thresholdWatts) || thresholdWatts <= 0 ||
+      !Number.isFinite(stableMinutes) || stableMinutes <= 0) return false;
+
+  const events = process.events
+    .filter(e => e.type === 'power_consumption' && Number.isFinite(e.value))
+    .map(e => ({ time: Date.parse(e.timestamp), power: e.value }))
+    .filter(e => Number.isFinite(e.time) && e.time <= now)
+    .sort((a, b) => a.time - b.time);
+  if (events.length < 20) return false;
+
+  const windowMs = stableMinutes * 60000;
+  const windowStart = now - windowMs;
+  // A low reading must cover the entire window. A burst of recent low
+  // readings alone is not evidence of sustained charging completion.
+  const baseline = [...events].reverse().find(e => e.time <= windowStart);
+  const recent = events.filter(e => e.time > windowStart);
+  if (!baseline || recent.length < 5) return false;
+  if (now - recent[recent.length - 1].time > 120000) return false;
+  if (baseline.power >= thresholdWatts ||
+      recent.some(e => e.power >= thresholdWatts || e.power < 0)) return false;
+
+  // Missing telemetry must never be interpreted as a stable low-power phase.
+  const samples = [baseline, ...recent];
+  const maxGapMs = Math.min(120000, windowMs / 2);
+  for (let i = 1; i < samples.length; i++) {
+    const from = Math.max(samples[i - 1].time, windowStart);
+    if (samples[i].time - from > maxGapMs) return false;
   }
-  
-  const powerEvents = process.events.filter(e => e.type === 'power_consumption');
-  
-  // Require more data points for reliable detection (increased from 10 to 20)
-  if (powerEvents.length < 20) {
-    return false; // Need more data
+  // Reject a rising low-power trend relative to the preceding five minutes.
+  const preceding = events.filter(e => e.time >= windowStart - 300000 && e.time <= windowStart);
+  if (preceding.length >= 3) {
+    const previousMean = preceding.reduce((sum, e) => sum + e.power, 0) / preceding.length;
+    const currentMean = recent.reduce((sum, e) => sum + e.power, 0) / recent.length;
+    if (currentMean > previousMean * 1.2) return false;
   }
-  
-  // Check recent events (last stableMinutes worth)
-  const now = Date.now();
-  const stableThresholdMs = stableMinutes * 60 * 1000;
-  const recentEvents = powerEvents.filter(e => 
-    now - new Date(e.timestamp).getTime() < stableThresholdMs
-  );
-  
-  // Require more recent data points for better confidence (increased from 3 to 5)
-  if (recentEvents.length < 5) {
-    return false; // Need more recent data
-  }
-  
-  // Check if all recent events are below threshold
-  const allBelowThreshold = recentEvents.every(e => e.value < thresholdWatts);
-  
-  if (!allBelowThreshold) {
-    return false;
-  }
-  
-  // Additional check: verify power is declining or stable (not increasing)
-  // Compare older events vs recent events to ensure we're not in a temporary dip
-  const bufferMinutes = 5; // Look back 5 minutes before the stable period
-  const bufferThresholdMs = (stableMinutes + bufferMinutes) * 60 * 1000;
-  const bufferEvents = powerEvents.filter(e => {
-    const eventTime = new Date(e.timestamp).getTime();
-    const timeDiff = now - eventTime;
-    return timeDiff >= stableThresholdMs && timeDiff < bufferThresholdMs;
-  });
-  
-  // If we have buffer events, check that power isn't increasing
-  if (bufferEvents.length >= 3) {
-    const bufferAvg = bufferEvents.reduce((sum, e) => sum + e.value, 0) / bufferEvents.length;
-    const recentAvg = recentEvents.reduce((sum, e) => sum + e.value, 0) / recentEvents.length;
-    
-    // If recent power is higher than buffer period, we might be charging again
-    // Add a 20% tolerance to account for normal fluctuations
-    if (recentAvg > bufferAvg * 1.2) {
-      return false; // Power is increasing, not in completion phase
-    }
-  }
-  
   return true;
 }
 
