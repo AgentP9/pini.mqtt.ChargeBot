@@ -21,6 +21,16 @@ try {
   assert.deepEqual(JSON.parse(fs.readFileSync(primary + '.bak')), history(8));
   assert.deepEqual(JSON.parse(fs.readFileSync(primary + '.bak.4')), history(4));
 
+  // A failed staging copy must not remove the previous backup generations.
+  const originalCopy = fs.copyFileSync;
+  const beforeFailure = fs.readFileSync(primary + '.bak', 'utf8');
+  fs.copyFileSync = () => { throw new Error('simulated backup staging failure'); };
+  try {
+    assert.throws(() => rotateBackup(primary), /simulated backup staging failure/);
+  } finally {
+    fs.copyFileSync = originalCopy;
+  }
+  assert.equal(fs.readFileSync(primary + '.bak', 'utf8'), beforeFailure);
   fs.writeFileSync(primary, '{broken');
   assert.throws(() => rotateBackup(primary));
   assert.deepEqual(JSON.parse(fs.readFileSync(primary + '.bak')), history(8));
