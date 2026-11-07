@@ -195,7 +195,7 @@ function checkAutoOff(chargerId) {
   }
 
   // Skip if charger is off or no active process
-  if (!chargerState.isOn || chargerState.currentProcessId === null) {
+  if (!chargerState.isOn || !chargerState.relayConfirmed || chargerState.currentProcessId === null) {
     // Clear any pending timers if charger is off
     if (autoOff.revalidationTimer) {
       clearTimeout(autoOff.revalidationTimer);
@@ -674,7 +674,7 @@ mqttClient.on('message', (topic, message) => {
       
       // Add to current process if one is active
       const processId = chargerStates[chargerId].currentProcessId;
-      if (processId !== null) {
+      if (processId !== null && chargerStates[chargerId].relayConfirmed && chargerStates[chargerId].isOn) {
         const process = chargingProcesses.find(p => p.id === processId);
         if (process) {
           process.events.push({
@@ -1613,7 +1613,7 @@ app.get('/api/chargers/:chargerId/completion-status', (req, res) => {
   }
   
   // If charger is not on or has no active process, it's not in completion phase
-  if (!chargerState.isOn || chargerState.currentProcessId === null) {
+  if (!chargerState.isOn || !chargerState.relayConfirmed || chargerState.currentProcessId === null) {
     return res.json({
       chargerId: chargerId,
       isActive: false,
