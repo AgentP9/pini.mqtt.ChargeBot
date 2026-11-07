@@ -49,4 +49,11 @@ function recoverApplianceStates(configs, processes, previous = {}) {
   return result;
 }
 
-module.exports = { recoverChargerStates, recoverApplianceStates, relayAction };
+function parseRelayState(payload) {
+  const normalized = String(payload).trim().toLowerCase();
+  if (normalized === 'on' || normalized === '1' || normalized === 'true') return true;
+  if (normalized === 'off' || normalized === '0' || normalized === 'false') return false;
+  return null;
+}
+
+module.exports = { recoverChargerStates, recoverApplianceStates, relayAction, parseRelayState };
