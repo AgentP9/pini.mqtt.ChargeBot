@@ -53,6 +53,7 @@ function saveProcesses(processes) {
     console.log(`Saved ${processes.length} charging processes to storage`);
   } catch (error) {
     console.error('Error saving processes to file:', error);
+    throw error;
   }
 }
 
@@ -91,6 +92,7 @@ function saveProcessCounter(counter) {
     console.log(`Saved process counter: ${counter}`);
   } catch (error) {
     console.error('Error saving process counter to file:', error);
+    throw error;
   }
 }
 
@@ -142,6 +144,7 @@ function saveAutoOffState(autoOffState) {
     console.log(`Saved auto-off state for ${Object.keys(cleanState).length} chargers to storage`);
   } catch (error) {
     console.error('Error saving auto-off state to file:', error);
+    throw error;
   }
 }
 
