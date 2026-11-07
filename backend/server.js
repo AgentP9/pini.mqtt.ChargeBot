@@ -697,9 +697,9 @@ mqttClient.on('message', (topic, message) => {
 
   // Handle power messages for appliances (cycle detection based on power threshold)
   if (applianceId && topic.endsWith('/power')) {
-    const power = parseFloat(messageStr);
+    const power = Number(messageStr.trim());
 
-    if (!isNaN(power)) {
+    if (messageStr.trim() !== '' && Number.isFinite(power) && power >= 0) {
       applianceStates[applianceId].power = power;
       applianceStates[applianceId].telemetryConfirmed = true;
 
