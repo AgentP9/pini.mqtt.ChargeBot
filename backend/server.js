@@ -1187,14 +1187,14 @@ app.get('/api/diagnostics/events', (req, res) => {
 app.get('/api/diagnostics/status', (req, res) => {
   const now = Date.now();
   const chargers = Object.entries(chargerStates).map(([id, state]) => {
-    const process = chargingProcesses.find(p => p.id === state.currentProcessId);
-    const sample = [...(process?.events || [])].reverse().find(e => e.type === 'power_consumption');
+    const activeProcess = chargingProcesses.find(p => p.id === state.currentProcessId);
+    const sample = [...(activeProcess?.events || [])].reverse().find(e => e.type === 'power_consumption');
     return {
       id, name: state.name, relayConfirmed: Boolean(state.relayConfirmed),
-      isOn: Boolean(state.isOn), processId: process?.id ?? null,
+      isOn: Boolean(state.isOn), processId: activeProcess?.id ?? null,
       autoOff: autoOffDiagnosis({
         mqttConnected: mqttClient.connected, charger: state, autoOff: autoOffState[id],
-        process, lastPowerTimestamp: sample?.timestamp, now
+        process: activeProcess, lastPowerTimestamp: sample?.timestamp, now
       })
     };
   });
