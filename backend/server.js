@@ -20,7 +20,11 @@ app.use(express.json());
 // Persistent storage for charging processes
 // Load existing processes from file
 const chargingProcesses = storage.loadProcesses();
-let processIdCounter = storage.loadProcessCounter();
+let processIdCounter = Math.max(
+  storage.loadProcessCounter(),
+  ...chargingProcesses.map(p => Number.isSafeInteger(p.id) ? p.id + 1 : 1),
+  1
+);
 
 // Pattern analysis storage
 let chargingPatterns = patternAnalyzer.loadPatterns();
@@ -202,6 +206,15 @@ function checkAutoOff(chargerId) {
 
   const process = chargingProcesses.find(p => p.id === chargerState.currentProcessId);
   if (!process || process.endTime) {
+    return;
+  }
+  // No automatic shutoff without a fresh power sample for this session.
+  const lastPowerEvent = [...(process.events || [])].reverse().find(e => e.type === 'power_consumption');
+  const sampleAge = lastPowerEvent ? Date.now() - Date.parse(lastPowerEvent.timestamp) : Infinity;
+  if (!Number.isFinite(sampleAge) || sampleAge < 0 || sampleAge > 120000) {
+    if (autoOff.revalidationTimer) clearTimeout(autoOff.revalidationTimer);
+    autoOff.revalidationTimer = null;
+    autoOff.completionDetectedAt = null;
     return;
   }
 
