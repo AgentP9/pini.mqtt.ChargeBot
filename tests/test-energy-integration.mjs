@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { calculateProcessEnergyWh } from '../frontend/src/utils/energy.js';
+import { calculateProcessEnergyWh } from '../frontend/src/utils/energy.mjs';
 const start = Date.UTC(2026, 0, 1);
 const sample = (minutes, power) => ({
   type: 'power_consumption',
