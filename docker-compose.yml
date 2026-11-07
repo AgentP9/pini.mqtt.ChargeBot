@@ -32,7 +32,7 @@ services:
       dockerfile: Dockerfile
     container_name: pini-frontend
     ports:
-      - "1818:80"
+      - "${CHARGEBOT_BIND_ADDRESS:-127.0.0.1}:1818:80"
     labels:
       - "io.portainer.accesscontrol.teams=administrators"
       - "com.pinicharging.description=MQTT Charging Monitor Frontend"
