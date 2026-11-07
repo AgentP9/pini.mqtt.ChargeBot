@@ -733,6 +733,13 @@ function isInCompletionPhase(process, thresholdWatts = 5, stableMinutes = 10, no
     const from = Math.max(samples[i - 1].time, windowStart);
     if (samples[i].time - from > maxGapMs) return false;
   }
+  // Reject a rising low-power trend relative to the preceding five minutes.
+  const preceding = events.filter(e => e.time >= windowStart - 300000 && e.time <= windowStart);
+  if (preceding.length >= 3) {
+    const previousMean = preceding.reduce((sum, e) => sum + e.power, 0) / preceding.length;
+    const currentMean = recent.reduce((sum, e) => sum + e.power, 0) / recent.length;
+    if (currentMean > previousMean * 1.2) return false;
+  }
   return true;
 }
 
