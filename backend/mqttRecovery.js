@@ -32,4 +32,21 @@ function relayAction(state, isOn) {
   return state.currentProcessId == null ? 'idle' : 'end';
 }
 
-module.exports = { recoverChargerStates, relayAction };
+function recoverApplianceStates(configs, processes, previous = {}) {
+  const result = {};
+  for (const appliance of configs) {
+    const open = processes
+      .filter(p => p.processType === 'appliance' && p.applianceId === appliance.id && !p.endTime)
+      .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime))[0];
+    const old = previous[appliance.id];
+    if (old?.cycleEndTimer) clearTimeout(old.cycleEndTimer);
+    result[appliance.id] = {
+      name: appliance.name, topic: appliance.topic, notifyTopic: appliance.notifyTopic,
+      power: 0, isRunning: Boolean(open), currentProcessId: open?.id ?? null,
+      cycleEndDetectedAt: null, cycleEndTimer: null, telemetryConfirmed: false
+    };
+  }
+  return result;
+}
+
+module.exports = { recoverChargerStates, recoverApplianceStates, relayAction };
