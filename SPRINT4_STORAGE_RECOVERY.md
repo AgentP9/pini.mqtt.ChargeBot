@@ -8,10 +8,11 @@ replacing it with an empty array. This protects history from accidental loss.
 
 ## Last-known-good backup
 
-Before each successful process-history replacement, ChargeBot validates the
-existing primary and writes a snapshot to
-`charging-processes.json.bak` in the same `DATA_DIR`. The backup is the
-*previous* version, not necessarily the latest saved history. The backup is
+Before each process-history replacement, ChargeBot validates the existing
+primary and rotates up to five snapshots in the same `DATA_DIR`:
+`charging-processes.json.bak` (newest previous version), then `.bak.1`
+through `.bak.4` (oldest). The backup is the *previous* version, not
+necessarily the latest saved history. The backup is
 not automatically restored: automatic fallback could silently discard newer
 events. Both the primary and backup should be included in external backups.
 
@@ -19,10 +20,13 @@ events. Both the primary and backup should be included in external backups.
 
 1. Stop ChargeBot and disable any restart policy while investigating.
 2. Copy the complete `DATA_DIR` to a safe location before modifying anything.
-3. Inspect `charging-processes.json`, `charging-processes.json.bak`, and any
-   external backup. Choose the newest verified, valid version.
-4. Copy the chosen version to `charging-processes.json` while the service is
-   stopped. Preserve the damaged original separately for diagnosis.
+3. Run `cd backend && node recovery-cli.js list` (with the same `DATA_DIR`
+   as the service). Inspect valid snapshots and any external backup.
+4. While the service is **stopped**, run
+   `node recovery-cli.js restore 0 --confirm-offline` to restore the newest
+   validated snapshot, or choose another listed index. The previous primary
+   is preserved with a `.pre-restore-<timestamp>` suffix. The CLI cannot
+   detect a running server; stopping it is the operator's responsibility.
 5. Start ChargeBot, check logs, and compare restored session counts and IDs.
 6. If newer sessions were lost, reconcile them deliberately before enabling
    unattended automatic shutdown.
