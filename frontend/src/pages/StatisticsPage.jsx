@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatDateTime } from '../utils/dateFormatter';
+import { calculateProcessEnergyWh } from '../utils/energy';
 import './StatisticsPage.css';
 
 function StatisticsPage({ processes, patterns, devices }) {
@@ -20,24 +21,9 @@ function StatisticsPage({ processes, patterns, devices }) {
         }, 0) / completedWithDuration.length
       : 0;
     
-    // Integrate actual timestamped MQTT power events (W × elapsed hours).
-    // Long gaps are deliberately excluded rather than extrapolated.
-    const totalEnergy = processes.reduce((sum, p) => {
-      const samples = (p.events || [])
-        .filter(e => e.type === 'power_consumption' && Number.isFinite(Number(e.value)) && Number(e.value) >= 0)
-        .map(e => ({ time: Date.parse(e.timestamp), power: Number(e.value) }))
-        .filter(e => Number.isFinite(e.time))
-        .sort((a, b) => a.time - b.time);
-      let wh = 0;
-      for (let i = 1; i < samples.length; i++) {
-        const elapsedMs = samples[i].time - samples[i - 1].time;
-        if (elapsedMs > 0 && elapsedMs <= 120000) {
-          wh += (samples[i - 1].power + samples[i].power) / 2 * elapsedMs / 3600000;
-        }
-      }
-      return sum + wh;
-    }, 0);
-    
+    // Sum energy from timestamped MQTT samples (Wh).
+    const totalEnergy = processes.reduce((sum, p) => sum + calculateProcessEnergyWh(p), 0);
+
     // Device usage count (by pattern)
     const deviceUsage = {};
     patterns.forEach(pattern => {
