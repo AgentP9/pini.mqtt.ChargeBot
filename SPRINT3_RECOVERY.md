@@ -6,7 +6,7 @@
 - On MQTT reconnect, retain the session ID instead of resetting it.
 - The first relay ON resumes an open session; the first OFF closes it.
 - Require a freshly confirmed relay state before recording charger power or evaluating auto-off.
-- Keep in-memory appliance cycles during MQTT broker reconnects; cancel their old end timers.
+- Recover appliance cycles from persisted history after backend restart and broker reconnect; cancel old end timers and wait for fresh power readings.
 - Regression tests for recovery, reconnect, duplicate relay ON, stale runtime IDs and closed sessions.
 
 ## Manual acceptance checklist (physical hardware)
@@ -27,7 +27,7 @@
 - The first relay message must reflect the current physical state. If the broker
   or device does not provide retained relay state, recovery remains pending
   until the next relay state message.
-- A backend restart does not yet reconstruct appliance cycles.
+- A backend restart restores the newest open appliance cycle. Completion checks wait for fresh power telemetry; real MQTT hardware behavior still needs validation.
 - Multiple already-open sessions for the same charger are not automatically
   closed; the newest open session is selected. Historical cleanup should be
   performed separately with an explicit reconciliation policy.
