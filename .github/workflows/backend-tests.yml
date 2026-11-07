@@ -21,6 +21,8 @@ jobs:
       - run: node --check server.js
       - run: node --check storage.js
       - run: node ../tests/test-storage-failures.js
+      - run: node --check mqttRecovery.js
+      - run: node ../tests/test-mqtt-recovery.js
       - run: node ../tests/test-energy-integration.mjs
       - run: node ../tests/run-completion-scenarios.js
       - run: node ../tests/test-completion-replay.js
