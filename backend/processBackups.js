@@ -28,11 +28,25 @@ function rotateBackup(primary, retention = DEFAULT_RETENTION) {
   const temp = `${paths[0]}.tmp`;
   fs.writeFileSync(temp, data, 'utf8');
   try {
-    if (fs.existsSync(paths[paths.length - 1])) fs.unlinkSync(paths[paths.length - 1]);
-    for (let i = paths.length - 2; i >= 0; i--) {
-      if (fs.existsSync(paths[i])) fs.renameSync(paths[i], paths[i + 1]);
+    // Stage copies first, leaving existing backups intact if staging fails.
+    const staged = [];
+    try {
+      for (let i = paths.length - 1; i >= 1; i--) {
+        if (!fs.existsSync(paths[i - 1])) continue;
+        const stagedPath = `${paths[i]}.rotate.tmp`;
+        fs.copyFileSync(paths[i - 1], stagedPath);
+        staged.push([stagedPath, paths[i]]);
+      }
+      // Publish older generations before publishing the newest snapshot.
+      for (const [stagedPath, destination] of staged) {
+        fs.renameSync(stagedPath, destination);
+      }
+      fs.renameSync(temp, paths[0]);
+    } finally {
+      for (const [stagedPath] of staged) {
+        if (fs.existsSync(stagedPath)) fs.unlinkSync(stagedPath);
+      }
     }
-    fs.renameSync(temp, paths[0]);
   } finally {
     if (fs.existsSync(temp)) fs.unlinkSync(temp);
   }
