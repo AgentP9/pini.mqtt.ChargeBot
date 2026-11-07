@@ -20,7 +20,11 @@ app.use(express.json());
 // Persistent storage for charging processes
 // Load existing processes from file
 const chargingProcesses = storage.loadProcesses();
-let processIdCounter = storage.loadProcessCounter();
+let processIdCounter = Math.max(
+  storage.loadProcessCounter(),
+  ...chargingProcesses.map(p => Number.isSafeInteger(p.id) ? p.id + 1 : 1),
+  1
+);
 
 // Pattern analysis storage
 let chargingPatterns = patternAnalyzer.loadPatterns();
@@ -204,6 +208,15 @@ function checkAutoOff(chargerId) {
   if (!process || process.endTime) {
     return;
   }
+  // No automatic shutoff without a fresh power sample for this session.
+  const lastPowerEvent = [...(process.events || [])].reverse().find(e => e.type === 'power_consumption');
+  const sampleAge = lastPowerEvent ? Date.now() - Date.parse(lastPowerEvent.timestamp) : Infinity;
+  if (!Number.isFinite(sampleAge) || sampleAge < 0 || sampleAge > 120000) {
+    if (autoOff.revalidationTimer) clearTimeout(autoOff.revalidationTimer);
+    autoOff.revalidationTimer = null;
+    autoOff.completionDetectedAt = null;
+    return;
+  }
 
   // Check if in completion phase
   const isCompleting = patternAnalyzer.isInCompletionPhase(process);
@@ -222,10 +235,10 @@ function checkAutoOff(chargerId) {
         
         // Revalidate completion state
         const currentProcess = chargingProcesses.find(p => p.id === chargerState.currentProcessId);
-        if (currentProcess && !currentProcess.endTime) {
+        if (autoOff.enabled && chargerState.isOn && chargerState.currentProcessId === process.id && currentProcess && !currentProcess.endTime) {
           const stillCompleting = patternAnalyzer.isInCompletionPhase(currentProcess);
           
-          if (stillCompleting) {
+          if (stillCompleting && mqttClient && mqttClient.connected && currentProcess.events.some(e => e.type === 'power_consumption' && Date.now() - new Date(e.timestamp).getTime() >= 0 && Date.now() - new Date(e.timestamp).getTime() < 120000)) {
             console.log(`Auto-off: Revalidation confirmed completion for charger ${chargerId}, turning off`);
             turnOffCharger(chargerId);
             // Reset state
@@ -428,53 +441,6 @@ const applianceCycleCheckInterval = setInterval(() => {
 
 // ──────────────────────────────────────────────────────────────────────────────
 
-// Cleanup on shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, cleaning up...');
-  if (autoOffCheckInterval) {
-    clearInterval(autoOffCheckInterval);
-  }
-  if (applianceCycleCheckInterval) {
-    clearInterval(applianceCycleCheckInterval);
-  }
-  // Clear all auto-off timers
-  Object.keys(autoOffState).forEach(chargerId => {
-    disableAutoOff(chargerId);
-  });
-  // Clear all appliance end timers
-  Object.keys(applianceStates).forEach(applianceId => {
-    const appliance = applianceStates[applianceId];
-    if (appliance && appliance.cycleEndTimer) {
-      clearTimeout(appliance.cycleEndTimer);
-      appliance.cycleEndTimer = null;
-    }
-  });
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received, cleaning up...');
-  if (autoOffCheckInterval) {
-    clearInterval(autoOffCheckInterval);
-  }
-  if (applianceCycleCheckInterval) {
-    clearInterval(applianceCycleCheckInterval);
-  }
-  // Clear all auto-off timers
-  Object.keys(autoOffState).forEach(chargerId => {
-    disableAutoOff(chargerId);
-  });
-  // Clear all appliance end timers
-  Object.keys(applianceStates).forEach(applianceId => {
-    const appliance = applianceStates[applianceId];
-    if (appliance && appliance.cycleEndTimer) {
-      clearTimeout(appliance.cycleEndTimer);
-      appliance.cycleEndTimer = null;
-    }
-  });
-  process.exit(0);
-});
-
 // MQTT Configuration
 const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
 const MQTT_USERNAME = process.env.MQTT_USERNAME || '';
@@ -529,6 +495,13 @@ const mqttClient = mqtt.connect(MQTT_BROKER_URL, mqttOptions);
 // Subscribe to topics for all configured chargers
 mqttClient.on('connect', () => {
   console.log('Connected to MQTT broker');
+  // Clear runtime state after reconnect; retained relay state will establish the
+  // current physical state. Never trust a pre-disconnect session for auto-off.
+  Object.values(autoOffState).forEach(state => {
+    if (state.revalidationTimer) clearTimeout(state.revalidationTimer);
+    state.revalidationTimer = null;
+    state.completionDetectedAt = null;
+  });
   
   MQTT_CHARGERS.forEach(charger => {
     // Subscribe to power on/off topic
@@ -551,7 +524,8 @@ mqttClient.on('connect', () => {
       }
     });
     
-    // Initialize charger state with unique ID and name
+    // Initialize charger state with unique ID and name only once.
+    // A reconnect must not silently orphan a running session.
     chargerStates[charger.id] = {
       name: charger.name,
       topic: charger.topic,
@@ -583,6 +557,14 @@ mqttClient.on('connect', () => {
       cycleEndDetectedAt: null,
       cycleEndTimer: null
     };
+  });
+});
+
+mqttClient.on('close', () => {
+  Object.values(autoOffState).forEach(state => {
+    if (state.revalidationTimer) clearTimeout(state.revalidationTimer);
+    state.revalidationTimer = null;
+    state.completionDetectedAt = null;
   });
 });
 
@@ -922,6 +904,14 @@ app.put('/api/processes/:id/device-name', (req, res) => {
   const trimmedName = newDeviceName.trim();
   const oldDeviceName = process.deviceName;
   
+  // Validate target before mutating either processes or patterns.
+  const existingPattern = chargingPatterns.find(pattern => pattern.processIds && pattern.processIds.includes(processId));
+  if (existingPattern && trimmedName !== oldDeviceName && !chargingPatterns.some(pattern => pattern.deviceName === trimmedName)) {
+    return res.status(404).json({ error: 'No pattern exists with this device name' });
+  }
+
+  if (trimmedName === oldDeviceName) return res.json({ success: true, process });
+
   // Update the process's device name
   process.deviceName = trimmedName;
   storage.saveProcesses(chargingProcesses);
@@ -1889,6 +1879,14 @@ function gracefulShutdown(signal) {
   storage.saveProcessCounter(processIdCounter);
   patternAnalyzer.savePatterns(chargingPatterns);
   storage.saveAutoOffState(autoOffState);
+
+  clearInterval(autoOffCheckInterval);
+  clearInterval(applianceCycleCheckInterval);
+  Object.values(autoOffState).forEach(state => {
+    if (state.revalidationTimer) clearTimeout(state.revalidationTimer);
+    state.revalidationTimer = null;
+    state.completionDetectedAt = null;
+  });
 
   // Clear all appliance cycle-end timers
   Object.keys(applianceStates).forEach(applianceId => {

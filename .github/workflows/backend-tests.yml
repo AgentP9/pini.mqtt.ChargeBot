@@ -1,0 +1,27 @@
+name: Backend regression tests
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: node --check server.js
+      - run: node --check storage.js
+      - run: node ../tests/test-storage-failures.js
+      - run: node ../tests/test-completion-detection.js
+      - run: node ../tests/test-auto-off-persistence.js
+      - run: node ../tests/test-pattern-identification.js
+      - run: node ../tests/test-appliance-detection.js
