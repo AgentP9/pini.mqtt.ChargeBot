@@ -15,7 +15,7 @@ function recoverChargerStates(configs, processes, previous = {}) {
       name: charger.name, topic: charger.topic,
       isOn: Boolean(old?.isOn),
       power: old?.power ?? 0,
-      currentProcessId: old?.currentProcessId ?? open?.id ?? null,
+      currentProcessId: open?.id ?? null,
       relayConfirmed: false
     };
   }
