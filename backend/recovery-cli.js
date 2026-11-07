@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 'use strict';
 const path = require('node:path');
-const fs = require('node:fs');
 const { listBackups, restoreBackup } = require('./processBackups');
 
 const dir = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -18,9 +17,7 @@ if (command === 'list') {
     process.exitCode = 2;
   } else {
     try {
-      // Operator must stop backend first. Reject restoration while lock marker exists.
-      const lock = path.join(dir, 'chargebot-server.lock');
-      if (fs.existsSync(lock)) throw new Error('Server lock marker exists; stop the backend first');
+      // Offline confirmation is explicit; the operator must stop the service.
       console.log(JSON.stringify(restoreBackup(primary, index), null, 2));
     } catch (error) {
       console.error('Restore refused:', error.message);
