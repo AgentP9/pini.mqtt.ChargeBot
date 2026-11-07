@@ -26,7 +26,7 @@ for (let i = 0; i < 15; i++) {
   activeProcess.events.push({
     timestamp: timestamp,
     type: 'power_consumption',
-    value: 15 + Math.random() * 10 // 15-25W
+    value: 15 + 5 // 15-25W
   });
 }
 
@@ -51,7 +51,7 @@ for (let i = 0; i < 15; i++) {
   completingProcess.events.push({
     timestamp: timestamp,
     type: 'power_consumption',
-    value: 20 + Math.random() * 10 // 20-30W
+    value: 20 + 5 // 20-30W
   });
 }
 
@@ -61,7 +61,7 @@ for (let i = 0; i < 15; i++) {
   completingProcess.events.push({
     timestamp: timestamp,
     type: 'power_consumption',
-    value: 2 + Math.random() * 2 // 2-4W (below 5W threshold)
+    value: 2 + 1 // 2-4W (below 5W threshold)
   });
 }
 
@@ -122,7 +122,7 @@ for (let i = 0; i < 10; i++) {
   increasingPowerProcess.events.push({
     timestamp: timestamp,
     type: 'power_consumption',
-    value: 15 + Math.random() * 5 // 15-20W
+    value: 15 + 2.5 // 15-20W
   });
 }
 
@@ -132,7 +132,7 @@ for (let i = 0; i < 8; i++) {
   increasingPowerProcess.events.push({
     timestamp: timestamp,
     type: 'power_consumption',
-    value: 1.5 + Math.random() * 1 // 1.5-2.5W
+    value: 1.5 + 0.5 // 1.5-2.5W
   });
 }
 
@@ -142,7 +142,7 @@ for (let i = 0; i < 12; i++) {
   increasingPowerProcess.events.push({
     timestamp: timestamp,
     type: 'power_consumption',
-    value: 3 + Math.random() * 1.5 // 3-4.5W (still below 5W but 50%+ higher than buffer period)
+    value: 3 + 0.75 // 3-4.5W (still below 5W but 50%+ higher than buffer period)
   });
 }
 
