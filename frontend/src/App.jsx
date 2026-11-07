@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import ChargingPage from './pages/ChargingPage';
 import DevicePage from './pages/DevicePage';
 import StatisticsPage from './pages/StatisticsPage';
+import DiagnosticsPage from './pages/DiagnosticsPage';
 import { useTheme } from './contexts/ThemeContext';
 import './App.css';
 
@@ -180,6 +181,7 @@ function App() {
                   />
                 } 
               />
+              <Route path="/diagnostics" element={<DiagnosticsPage />} />
               <Route 
                 path="/statistics" 
                 element={
