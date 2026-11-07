@@ -542,17 +542,20 @@ mqttClient.on('connect', () => {
       }
     });
 
-    // Initialize appliance state
+    // Preserve an in-memory appliance cycle across broker reconnects.
+    // A restart still requires a separate appliance recovery policy.
+    const previous = applianceStates[appliance.id];
     applianceStates[appliance.id] = {
       name: appliance.name,
       topic: appliance.topic,
       notifyTopic: appliance.notifyTopic,
-      power: 0,
-      isRunning: false,
-      currentProcessId: null,
+      power: previous?.power ?? 0,
+      isRunning: previous?.isRunning ?? false,
+      currentProcessId: previous?.currentProcessId ?? null,
       cycleEndDetectedAt: null,
       cycleEndTimer: null
     };
+    if (previous?.cycleEndTimer) clearTimeout(previous.cycleEndTimer);
   });
 });
 
