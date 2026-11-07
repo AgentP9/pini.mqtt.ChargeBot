@@ -222,10 +222,10 @@ function checkAutoOff(chargerId) {
         
         // Revalidate completion state
         const currentProcess = chargingProcesses.find(p => p.id === chargerState.currentProcessId);
-        if (currentProcess && !currentProcess.endTime) {
+        if (autoOff.enabled && chargerState.isOn && chargerState.currentProcessId === process.id && currentProcess && !currentProcess.endTime) {
           const stillCompleting = patternAnalyzer.isInCompletionPhase(currentProcess);
           
-          if (stillCompleting) {
+          if (stillCompleting && mqttClient && mqttClient.connected && currentProcess.events.some(e => e.type === 'power_consumption' && Date.now() - new Date(e.timestamp).getTime() >= 0 && Date.now() - new Date(e.timestamp).getTime() < 120000)) {
             console.log(`Auto-off: Revalidation confirmed completion for charger ${chargerId}, turning off`);
             turnOffCharger(chargerId);
             // Reset state
@@ -439,7 +439,10 @@ process.on('SIGTERM', () => {
   }
   // Clear all auto-off timers
   Object.keys(autoOffState).forEach(chargerId => {
-    disableAutoOff(chargerId);
+    const state = autoOffState[chargerId];
+    if (state.revalidationTimer) clearTimeout(state.revalidationTimer);
+    state.revalidationTimer = null;
+    state.completionDetectedAt = null;
   });
   // Clear all appliance end timers
   Object.keys(applianceStates).forEach(applianceId => {
@@ -922,6 +925,12 @@ app.put('/api/processes/:id/device-name', (req, res) => {
   const trimmedName = newDeviceName.trim();
   const oldDeviceName = process.deviceName;
   
+  // Validate target before mutating either processes or patterns.
+  const existingPattern = chargingPatterns.find(pattern => pattern.processIds && pattern.processIds.includes(processId));
+  if (existingPattern && !chargingPatterns.some(pattern => pattern.deviceName === trimmedName)) {
+    return res.status(404).json({ error: 'No pattern exists with this device name' });
+  }
+
   // Update the process's device name
   process.deviceName = trimmedName;
   storage.saveProcesses(chargingProcesses);
