@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { validateProcesses } = require('./processIntegrity');
+const { rotateBackup } = require('./processBackups');
 
 // Data directory for persistent storage
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -52,15 +53,8 @@ function saveProcesses(processes) {
     // Write to a temporary file first, then rename for atomic operation
     const tempFile = `${PROCESSES_FILE}.tmp`;
     fs.writeFileSync(tempFile, JSON.stringify(processes, null, 2), 'utf8');
-    // Keep one last-known-good snapshot before replacing the primary file.
-    // The backup is updated only after validating the existing primary.
-    if (fs.existsSync(PROCESSES_FILE)) {
-      const existing = fs.readFileSync(PROCESSES_FILE, 'utf8');
-      validateProcesses(JSON.parse(existing));
-      const backupTemp = `${PROCESSES_FILE}.bak.tmp`;
-      fs.writeFileSync(backupTemp, existing, 'utf8');
-      fs.renameSync(backupTemp, `${PROCESSES_FILE}.bak`);
-    }
+    // Rotate validated snapshots; never replace a corrupt primary silently.
+    rotateBackup(PROCESSES_FILE);
     fs.renameSync(tempFile, PROCESSES_FILE);
     console.log(`Saved ${processes.length} charging processes to storage`);
   } catch (error) {
