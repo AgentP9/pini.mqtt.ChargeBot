@@ -190,7 +190,7 @@ function checkAutoOff(chargerId) {
   const chargerState = chargerStates[chargerId];
 
   // Skip if auto-off not enabled or charger not found
-  if (!autoOff || !autoOff.enabled || !chargerState) {
+  if (!mqttClient.connected || !autoOff || !autoOff.enabled || !chargerState) {
     return;
   }
 
