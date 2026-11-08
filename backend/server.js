@@ -1198,8 +1198,10 @@ app.get('/api/chargers/:chargerId/completion-assessment', (req, res) => {
   if (!state) return res.status(404).json({ error: 'Charger not found' });
   const activeProcess = chargingProcesses.find(p => p.id === state.currentProcessId);
   const assessment = assessCompletion(activeProcess);
+  const legacyReady = activeProcess ? patternAnalyzer.isInCompletionPhase(activeProcess) : false;
   res.json({ chargerId: req.params.chargerId, processId: activeProcess?.id ?? null,
-    assessment, advisoryOnly: true });
+    assessment, comparison: { legacyReady, assessmentReady: assessment.ready,
+      agrees: legacyReady === assessment.ready }, advisoryOnly: true });
 });
 
 // Diagnostic endpoints: bounded in-memory journal, no MQTT credentials or raw payloads.
