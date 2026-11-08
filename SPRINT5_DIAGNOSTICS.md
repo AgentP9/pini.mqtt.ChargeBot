@@ -18,6 +18,17 @@ Reasons include `disabled`, `mqtt_disconnected`, `relay_off`,
 `relay_unconfirmed`, `no_active_process`, `telemetry_stale`,
 `completion_timer_active`, and `monitoring`.
 
+## Auto-off decision tracing
+
+The journal records deduplicated `auto_off_state_changed` transitions (e.g.
+`monitoring`, `completion_detected`, `telemetry_stale`, or
+`mqtt_disconnected`). After the completion delay, an
+`auto_off_revalidated` event records whether shutdown is allowed and the
+reason. A command event is recorded only when shutdown is requested. The
+revalidation decision also requires confirmed relay state and a matching
+active session. CI covers disconnect, stale/future telemetry, changed session,
+relay confirmation, disabled automation, and resumed charging.
+
 ## Operational limits
 
 - The event journal is **in-memory** and intentionally resets on backend
