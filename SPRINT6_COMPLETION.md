@@ -64,3 +64,34 @@ The command reports disagreements, false positives and false negatives;
 returns nonzero for disagreement or false positive. It reads the file locally
 without sending samples to a server. CI tests the replay harness with
 synthetic examples; **no real charging traces have been supplied or tested yet**.
+
+## Export existing ChargeBot history locally
+
+The backend already persists charging sessions and serves them at
+`GET /api/processes`. Obtain the JSON only within your trusted network
+and store it locally. It contains sensitive raw history; **do not commit it**.
+
+```sh
+node backend/export-process-replays.js /private/processes.json /private/replay-candidates.json
+```
+
+The export excludes appliance sessions and active charging sessions by
+default, retains only timestamp/power samples, shifts timestamps to a fixed
+synthetic date while preserving intervals, and strips device identifiers and
+names. The output file is created with owner-only permissions and will not
+overwrite an existing file. `--include-active` explicitly opts into active
+sessions. Candidates with fewer than 20 valid samples are skipped.
+
+**Manual ground truth is required:** each exported candidate has
+`"expectedReady": null`. Review the trace using independent evidence
+(e.g. known charge status or verified end-of-charge), then set this to
+`true` or `false`. Do not infer ground truth from the existing detector or
+the fact that a process has an end time. The replay runner rejects unlabeled
+candidates. Evaluate only at the exported `evaluationTime`; a finished
+session may have been switched off manually.
+
+```sh
+node backend/replay-real-traces.js /private/verified-replays.json
+```
+
+**No production data has been retrieved or exported by this change.**
