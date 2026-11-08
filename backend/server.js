@@ -181,8 +181,10 @@ function turnOffCharger(chargerId) {
   mqttClient.publish(commandTopic, command, { qos: 1, retain: false }, (err) => {
     if (err) {
       console.error(`Auto-off: Failed to send OFF command to ${commandTopic}:`, err);
+      diagnosticJournal.record('auto_off_publish_failed', { chargerId, message: err.message });
     } else {
       console.log(`Auto-off: Successfully sent OFF command to charger "${chargerState.name}"`);
+      diagnosticJournal.record('auto_off_publish_acknowledged', { chargerId });
     }
   });
 }
@@ -260,7 +262,7 @@ function checkAutoOff(chargerId) {
           if (decision.allowed) {
             console.log(`Auto-off: Revalidation confirmed completion for charger ${chargerId}, turning off`);
             turnOffCharger(chargerId);
-            diagnosticJournal.record('auto_off_command', { chargerId, processId: process.id });
+            diagnosticJournal.record('auto_off_command_requested', { chargerId, processId: process.id });
             // Reset state
             autoOff.completionDetectedAt = null;
             autoOff.revalidationTimer = null;
