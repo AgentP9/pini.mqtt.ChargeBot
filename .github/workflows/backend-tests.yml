@@ -19,6 +19,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: node --check server.js
+      - run: node ../tests/test-diagnostics.js
+      - run: node ../tests/test-auto-off-observability.js
       - run: node --check storage.js
       - run: node ../tests/test-process-integrity.js
       - run: node ../tests/test-backup-rotation.js

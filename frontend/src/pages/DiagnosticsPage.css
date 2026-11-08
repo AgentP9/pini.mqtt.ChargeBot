@@ -1,0 +1,15 @@
+.diagnostics-page{max-width:1200px;margin:0 auto;padding:1.5rem;color:inherit}
+.diagnostics-heading{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.diagnostics-heading p,.diagnostics-note{opacity:.7}
+.diagnostics-heading button,.diagnostics-heading select{padding:.5rem .75rem;border:1px solid #8b8b8b;border-radius:8px;background:transparent;color:inherit}
+.diagnostics-summary,.diagnostics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin:1rem 0 2rem}
+.diagnostics-summary>div,.diagnostics-card,.diagnostics-event{border:1px solid #8885;border-radius:10px;padding:1rem}
+.diagnostics-summary span{display:block;opacity:.75;margin-bottom:.5rem}
+.diagnostics-summary strong{font-size:1.15rem}
+.diagnostics-card h4{margin-top:0}
+.diagnostics-card p{overflow-wrap:anywhere}
+.diagnostics-events{display:grid;gap:.5rem;margin-top:1rem}
+.diagnostics-event{display:grid;grid-template-columns:minmax(145px,190px) minmax(140px,200px) 1fr;gap:.75rem;align-items:center}
+.diagnostics-event span{overflow-wrap:anywhere}
+.diagnostics-error{color:#c0392b}
+@media(max-width:650px){.diagnostics-page{padding:1rem}.diagnostics-event{grid-template-columns:1fr;gap:.25rem}}

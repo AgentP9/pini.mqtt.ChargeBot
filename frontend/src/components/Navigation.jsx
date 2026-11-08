@@ -24,6 +24,12 @@ function Navigation() {
       >
         📊 Statistics
       </NavLink>
+      <NavLink
+        to="/diagnostics"
+        className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+      >
+        🩺 Diagnostics
+      </NavLink>
     </nav>
   );
 }
