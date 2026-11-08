@@ -24,7 +24,10 @@ The journal records deduplicated `auto_off_state_changed` transitions (e.g.
 `monitoring`, `completion_detected`, `telemetry_stale`, or
 `mqtt_disconnected`). After the completion delay, an
 `auto_off_revalidated` event records whether shutdown is allowed and the
-reason. A command event is recorded only when shutdown is requested. The
+reason. A command-requested event is recorded when shutdown is requested; separate
+`auto_off_publish_acknowledged` and `auto_off_publish_failed` events
+report the MQTT publish callback result. A publish acknowledgement is **not**
+proof that the physical relay switched off; use relay telemetry to verify. The
 revalidation decision also requires confirmed relay state and a matching
 active session. CI covers disconnect, stale/future telemetry, changed session,
 relay confirmation, disabled automation, and resumed charging.
