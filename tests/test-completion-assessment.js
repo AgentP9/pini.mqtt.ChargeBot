@@ -15,7 +15,7 @@ const cases = [
   [() => ({ ...baseline, endTime: new Date(now).toISOString() }), 'inactive_session'],
   [() => ({ ...baseline, events: baseline.events.slice(-3) }), 'insufficient_samples'],
   [() => ({ ...baseline, events: baseline.events.map((e, i) => i === 19 ? { ...e, value: 20 } : e) }), 'power_above_threshold'],
-  [() => ({ ...baseline, events: baseline.events.map((e, i) => i > 10 && i < 19 ? { ...e, timestamp: new Date(now - 900000).toISOString() } : e) }), 'telemetry_gap'],
+  [() => ({ ...baseline, events: baseline.events.map((e, i) => i >= 13 && i <= 15 ? { ...e, timestamp: new Date(now - 900000).toISOString() } : e) }), 'telemetry_gap'],
   [() => ({ ...baseline, events: baseline.events.map(e => ({ ...e, timestamp: new Date(Date.parse(e.timestamp) - 300000).toISOString() })) }), 'telemetry_stale']
 ];
 for (const [create, reason] of cases) {
