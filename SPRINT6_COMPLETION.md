@@ -6,7 +6,8 @@ explains why a charging session is or is not considered complete.
 Endpoint: `GET /api/chargers/:chargerId/completion-assessment`.
 
 It returns an `assessment` with `ready`, `reason`, and optional sample
-metadata. Reasons include `insufficient_samples`,
+metadata, plus a `comparison` against the existing detector. The Diagnostics
+tab shows the evidence and highlights when the detectors disagree. Reasons include `insufficient_samples`,
 `insufficient_window_coverage`, `telemetry_stale`, `telemetry_gap`,
 `power_above_threshold`, `rising_power_trend`, and `stable_low_power`.
 
