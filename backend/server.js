@@ -5,6 +5,8 @@ const dotenv = require('dotenv');
 const storage = require('./storage');
 const { createEventJournal, autoOffDiagnosis } = require('./diagnostics');
 const diagnosticJournal = createEventJournal();
+const { createTransitionRecorder, evaluateRevalidation } = require('./autoOffObservability');
+const autoOffTransitions = createTransitionRecorder(diagnosticJournal);
 const fs = require('node:fs');
 const path = require('node:path');
 const { listBackups } = require('./processBackups');
@@ -196,11 +198,13 @@ function checkAutoOff(chargerId) {
 
   // Skip if auto-off not enabled or charger not found
   if (!mqttClient.connected || !autoOff || !autoOff.enabled || !chargerState) {
+    autoOffTransitions.update(chargerId, !mqttClient.connected ? 'mqtt_disconnected' : (!autoOff?.enabled ? 'disabled' : 'charger_unknown'));
     return;
   }
 
   // Skip if charger is off or no active process
   if (!chargerState.isOn || !chargerState.relayConfirmed || chargerState.currentProcessId === null) {
+    autoOffTransitions.update(chargerId, !chargerState.isOn ? 'relay_off' : (!chargerState.relayConfirmed ? 'relay_unconfirmed' : 'no_active_process'));
     // Clear any pending timers if charger is off
     if (autoOff.revalidationTimer) {
       clearTimeout(autoOff.revalidationTimer);
@@ -212,12 +216,14 @@ function checkAutoOff(chargerId) {
 
   const process = chargingProcesses.find(p => p.id === chargerState.currentProcessId);
   if (!process || process.endTime) {
+    autoOffTransitions.update(chargerId, 'no_active_process');
     return;
   }
   // No automatic shutoff without a fresh power sample for this session.
   const lastPowerEvent = [...(process.events || [])].reverse().find(e => e.type === 'power_consumption');
   const sampleAge = lastPowerEvent ? Date.now() - Date.parse(lastPowerEvent.timestamp) : Infinity;
   if (!Number.isFinite(sampleAge) || sampleAge < 0 || sampleAge > 120000) {
+    autoOffTransitions.update(chargerId, 'telemetry_stale');
     if (autoOff.revalidationTimer) clearTimeout(autoOff.revalidationTimer);
     autoOff.revalidationTimer = null;
     autoOff.completionDetectedAt = null;
@@ -227,6 +233,7 @@ function checkAutoOff(chargerId) {
   // Check if in completion phase
   const isCompleting = patternAnalyzer.isInCompletionPhase(process);
 
+  autoOffTransitions.update(chargerId, isCompleting ? 'completion_detected' : 'monitoring');
   if (isCompleting) {
     const now = Date.now();
 
@@ -244,7 +251,13 @@ function checkAutoOff(chargerId) {
         if (autoOff.enabled && chargerState.isOn && chargerState.currentProcessId === process.id && currentProcess && !currentProcess.endTime) {
           const stillCompleting = patternAnalyzer.isInCompletionPhase(currentProcess);
           
-          if (stillCompleting && mqttClient && mqttClient.connected && currentProcess.events.some(e => e.type === 'power_consumption' && Date.now() - new Date(e.timestamp).getTime() >= 0 && Date.now() - new Date(e.timestamp).getTime() < 120000)) {
+          const decision = evaluateRevalidation({
+            mqttConnected: mqttClient.connected, enabled: autoOff.enabled,
+            charger: chargerState, process: currentProcess, expectedProcessId: process.id,
+            completing: stillCompleting
+          });
+          diagnosticJournal.record('auto_off_revalidated', { chargerId, processId: process.id, ...decision });
+          if (decision.allowed) {
             console.log(`Auto-off: Revalidation confirmed completion for charger ${chargerId}, turning off`);
             turnOffCharger(chargerId);
             diagnosticJournal.record('auto_off_command', { chargerId, processId: process.id });
