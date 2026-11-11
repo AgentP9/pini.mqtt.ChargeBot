@@ -168,3 +168,12 @@
     gap: 0.75rem;
   }
 }
+
+
+/* Shared visual primitives for secondary screens. */
+.card { border-radius: 16px; border: 1px solid var(--border-primary); box-shadow: none; }
+.card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.04); }
+.card h2 { border-bottom: 0; padding-bottom: 0; }
+.clear-selection-button, .select-all-toggle-button { border-radius: 10px; min-height: 42px; }
+.process-info { border-radius: 12px; }
+@media(max-width:600px){.dashboard-grid { grid-template-columns: minmax(0,1fr); }}
