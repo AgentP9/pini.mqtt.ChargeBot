@@ -36,3 +36,12 @@
     padding: 1rem;
   }
 }
+
+
+/* Bring management screens into the smart-home design system. */
+.device-page { display: flex; flex-direction: column; gap: 1.25rem; }
+.device-page .card { border: 1px solid var(--border-primary); border-radius: 16px; box-shadow: none; }
+.device-page button:not(.toggle-switch), .device-page select, .device-page input { border-radius: 10px; min-height: 40px; }
+.device-page button:focus-visible, .device-page select:focus-visible, .device-page input:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 2px; }
+.device-page .process-section-header { gap: 1rem; }
+.device-page .process-cleanup-controls { padding: .5rem; border-radius: 12px; background: var(--bg-secondary); }
