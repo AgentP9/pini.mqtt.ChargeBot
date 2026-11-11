@@ -177,3 +177,10 @@
 .clear-selection-button, .select-all-toggle-button { border-radius: 10px; min-height: 42px; }
 .process-info { border-radius: 12px; }
 @media(max-width:600px){.dashboard-grid { grid-template-columns: minmax(0,1fr); }}
+
+
+/* Sprint 9: selection is a neutral operation, not a destructive action. */
+.device-page .select-all-toggle-button { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-secondary); }
+.device-page .select-all-toggle-button:hover { background: var(--bg-hover); box-shadow: none; transform: none; }
+.device-page .clear-selection-button { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-secondary); }
+.device-page .clear-selection-button:hover { background: var(--bg-hover); transform: none; }
