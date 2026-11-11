@@ -7,6 +7,10 @@ import './StatisticsPage.css';
 
 function StatisticsPage({ processes, patterns, devices }) {
   const [exporting, setExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [exportLimit, setExportLimit] = useState('20');
+  const candidates = useMemo(() => processes.filter(p => p.endTime && p.processType !== 'appliance' && Array.isArray(p.events) && p.events.filter(e => e.type === 'power_consumption').length >= 20).sort((a, b) => new Date(b.startTime) - new Date(a.startTime)).slice(0, 100), [processes]);
+  const exportIds = selectedIds.filter(id => candidates.some(p => p.id === id));
   const [exportError, setExportError] = useState('');
   const [exportSummary, setExportSummary] = useState('');
 
@@ -15,7 +19,9 @@ function StatisticsPage({ processes, patterns, devices }) {
     setExportError('');
     setExportSummary('');
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_URL || '/api'}/processes/replay-export`, { timeout: 30000 });
+      const ids = exportIds.length ? exportIds : candidates.slice(0, Number(exportLimit)).map(p => p.id);
+      if (!ids.length) throw new Error('No eligible completed sessions available');
+      const response = await axios.get(`${import.meta.env.VITE_API_URL || '/api'}/processes/replay-export`, { params: { ids: ids.join(',') }, timeout: 30000 });
       const { traces, skipped } = response.data;
       if (!Array.isArray(traces)) throw new Error('Unexpected export response');
       const blob = new Blob([JSON.stringify(traces, null, 2)], { type: 'application/json' });
@@ -149,7 +155,19 @@ function StatisticsPage({ processes, patterns, devices }) {
       <section className="replay-export-panel" aria-label="Charging history export">
         <h3>Completion validation export</h3>
         <p>Download anonymized charging power histories for offline validation (Sprint 7). Device names and IDs are removed and timestamps are shifted. Completed sessions are not automatically considered fully charged.</p>
-        <button type="button" disabled={exporting} onClick={downloadReplayExport}>
+        <div className="export-controls">
+          <label htmlFor="export-limit">Default export size</label>
+          <select id="export-limit" value={exportLimit} onChange={e => setExportLimit(e.target.value)} disabled={exporting || exportIds.length > 0}>
+            <option value="10">Latest 10</option><option value="20">Latest 20</option><option value="50">Latest 50</option><option value="100">Latest 100</option>
+          </select>
+          <span>{exportIds.length ? `${exportIds.length} selected` : 'Or select specific sessions below'}</span>
+        </div>
+        <details className="export-session-picker">
+          <summary>Select individual completed sessions ({candidates.length} eligible shown)</summary>
+          <div className="export-picker-actions"><button type="button" onClick={() => setSelectedIds(candidates.map(p => p.id))}>Select all shown</button><button type="button" onClick={() => setSelectedIds([])}>Clear selection</button></div>
+          <div className="export-session-list">{candidates.map(p => <label key={p.id}><input type="checkbox" checked={exportIds.includes(p.id)} onChange={e => setSelectedIds(current => e.target.checked ? [...current, p.id] : current.filter(id => id !== p.id))} /><span>Session #{p.id} · {formatDateTime(p.startTime)} · {p.deviceName || p.chargerName || 'Unknown device'}</span></label>)}</div>
+        </details>
+        <button type="button" disabled={exporting || candidates.length === 0} onClick={downloadReplayExport}>
           {exporting ? 'Preparing export…' : 'Export anonymized replay JSON'}
         </button>
         {exportSummary && <p role="status">{exportSummary}</p>}
