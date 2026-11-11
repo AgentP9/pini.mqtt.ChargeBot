@@ -264,3 +264,20 @@
     flex-direction: column;
   }
 }
+
+
+/* Sprint 9: coherent management actions and recognizable device cards. */
+.device-page .pattern-header-row { justify-content: flex-start; flex-wrap: wrap; gap: .75rem; }
+.device-page .header-buttons { flex-wrap: wrap; }
+.device-page .create-button { background: var(--primary-color); border: 1px solid var(--primary-color); border-radius: 10px; min-height: 44px; }
+.device-page .rerun-button { background: var(--bg-secondary); border: 1px solid var(--border-secondary); color: var(--text-primary); border-radius: 10px; min-height: 44px; }
+.device-page .rerun-button:hover { background: var(--bg-hover); box-shadow: none; transform: none; }
+.device-page .pattern-card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 14px; }
+.device-page .pattern-card.selected { border-color: var(--primary-color); box-shadow: 0 0 0 1px var(--primary-color); }
+.device-page .pattern-expand-btn, .device-page .pattern-edit-btn, .device-page .pattern-delete-btn { min-width: 40px; min-height: 40px; border-radius: 10px; border: 1px solid transparent; }
+.device-page .pattern-edit-btn:hover, .device-page .pattern-expand-btn:hover { background: var(--bg-hover); transform: none; }
+.device-page .pattern-delete-btn { color: var(--status-error); }
+.device-page .pattern-delete-btn:hover { background: var(--status-error-bg); transform: none; }
+.device-page .pattern-actions { flex-wrap: wrap; justify-content: flex-end; }
+.device-page .charging-profile, .device-page .curve-phase { border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { .device-page .pattern-card, .device-page .create-button, .device-page .rerun-button { transition: none; } }
