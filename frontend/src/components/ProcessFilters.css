@@ -163,3 +163,13 @@
     width: 100%;
   }
 }
+
+
+/* Sprint 9: quiet filter surface and consistent form controls. */
+.device-page .process-filters { background: var(--bg-secondary); border-radius: 12px; }
+.device-page .filter-toggle-button { min-height: 44px; border-radius: 12px; }
+.device-page .filter-select, .device-page .filter-input { border-radius: 10px; min-height: 42px; }
+.device-page .clear-filters-button { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-secondary); border-radius: 10px; min-height: 42px; }
+.device-page .clear-filters-button:hover { background: var(--bg-hover); transform: none; box-shadow: none; }
+.device-page .filter-group { min-width: min(150px,100%); }
+@media (prefers-reduced-motion: reduce) { .device-page .filter-row { animation: none; } }
