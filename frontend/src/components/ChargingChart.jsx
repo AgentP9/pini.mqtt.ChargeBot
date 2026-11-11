@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { calculateProcessEnergyWh } from '../utils/energy.mjs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import './ChargingChart.css';
 
@@ -101,7 +102,7 @@ function ChargingChart({ processes, patterns = [], completionStatus = null }) {
       const duration = process.endTime 
         ? new Date(process.endTime) - new Date(process.startTime)
         : Date.now() - new Date(process.startTime);
-      const totalEnergy = (avgPower * duration / 1000 / 3600).toFixed(2); // Wh
+      const totalEnergy = calculateProcessEnergyWh(process).toFixed(2); // Integrate timestamped power samples
       
       return {
         maxPower: maxPower.toFixed(2),
@@ -156,17 +157,18 @@ function ChargingChart({ processes, patterns = [], completionStatus = null }) {
         </div>
       )}
       
-      <div className="chart-container">
+      <div className="chart-container" aria-label="Charging power over time">
         <ResponsiveContainer width="100%" height={400}>
           <LineChart
             data={chartData}
             margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.35} />
             <XAxis 
               dataKey={isMultiProcess ? "seconds" : "time"}
               stroke="#666"
               tick={{ fontSize: 12 }}
+              minTickGap={28}
               label={isMultiProcess ? { value: 'Time from Start', position: 'insideBottom', offset: -5 } : undefined}
             />
             <YAxis 
@@ -175,6 +177,7 @@ function ChargingChart({ processes, patterns = [], completionStatus = null }) {
               label={{ value: 'Power (W)', angle: -90, position: 'insideLeft' }}
             />
             <Tooltip 
+              isAnimationActive={false}
               contentStyle={{ 
                 backgroundColor: 'white', 
                 border: '1px solid #ccc',
@@ -189,7 +192,7 @@ function ChargingChart({ processes, patterns = [], completionStatus = null }) {
                 dataKey="power" 
                 stroke={completionStatus?.isInCompletionPhase ? COMPLETION_COLOR : DEFAULT_SINGLE_COLOR} 
                 strokeWidth={2}
-                dot={{ fill: completionStatus?.isInCompletionPhase ? COMPLETION_COLOR : DEFAULT_SINGLE_COLOR, r: 3 }}
+                dot={false}
                 activeDot={{ r: 6 }}
                 name="Power (W)"
               />
