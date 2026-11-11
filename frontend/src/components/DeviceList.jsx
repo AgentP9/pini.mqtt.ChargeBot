@@ -263,6 +263,10 @@ function DeviceList({ devices, processes, patterns, selectedDeviceId, onSelectDe
           aria-pressed={isSelectable ? selectedDeviceId === device.id : undefined}
           aria-label={isSelectable ? `Select ${device.name}` : undefined}
         >
+          <div className="smart-device-status" role="status">
+            <span className={`smart-status-dot ${isCompleting ? 'completing' : device.isOn ? 'active' : 'idle'}`} aria-hidden="true" />
+            {isCompleting ? 'Completion phase' : device.isOn ? (Number(device.power) > 5 ? 'Charging' : 'Switched on') : 'Switched off'}
+          </div>
           <div className="device-header">
             <h3 className="device-name">{device.name}</h3>
             <div className="device-header-right">
@@ -305,20 +309,20 @@ function DeviceList({ devices, processes, patterns, selectedDeviceId, onSelectDe
           </div>
           <div className="device-details">
             <div className="detail-row">
-              <span className="detail-label">Power:</span>
+              <span className="detail-label">Current power</span>
               <span className="detail-value">
                 {device.isOn && device.power > 0 ? `${device.power.toFixed(2)} W` : '0.00 W'}
               </span>
             </div>
             <div className="detail-row">
-              <span className="detail-label">Current Process:</span>
+              <span className="detail-label">Session</span>
               <span className="detail-value">
                 {device.currentProcessId !== null ? `#${device.currentProcessId}` : '-'}
               </span>
             </div>
             {assignedDeviceName && (
               <div className="detail-row assigned-device-row">
-                <span className="detail-label">Charging Device:</span>
+                <span className="detail-label">Recognized device</span>
                 <span className="detail-value assigned-device-value">
                   {assignedDeviceName}
                 </span>
