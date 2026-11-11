@@ -13,3 +13,13 @@
 .diagnostics-event span{overflow-wrap:anywhere}
 .diagnostics-error{color:#c0392b}
 @media(max-width:650px){.diagnostics-page{padding:1rem}.diagnostics-event{grid-template-columns:1fr;gap:.25rem}}
+
+
+/* Match the same cards and controls as Charging. */
+.diagnostics-page { max-width: 1400px; padding: 2rem; }
+.diagnostics-heading h2 { margin-bottom: .3rem; font-size: clamp(1.5rem, 3vw, 2rem); }
+.diagnostics-heading button, .diagnostics-heading select { border: 1px solid var(--border-secondary); border-radius: 10px; padding: .75rem 1rem; background: var(--bg-secondary); color: var(--text-primary); min-height: 44px; cursor: pointer; }
+.diagnostics-heading button:focus-visible, .diagnostics-heading select:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 2px; }
+.diagnostics-summary>div, .diagnostics-card, .diagnostics-event { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 16px; padding: 1.25rem; }
+.diagnostics-summary strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+@media(max-width:650px){.diagnostics-page { padding: 1rem; }}
