@@ -25,6 +25,7 @@ jobs:
       - run: node ../tests/test-completion-replay-matrix.js
       - run: node ../tests/test-real-trace-replay.js
       - run: node ../tests/test-process-replay-export.js
+      - run: node ../tests/test-dashboard-export.js
       - run: node --check storage.js
       - run: node ../tests/test-process-integrity.js
       - run: node ../tests/test-backup-rotation.js
