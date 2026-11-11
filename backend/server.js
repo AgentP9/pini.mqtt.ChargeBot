@@ -7,6 +7,7 @@ const { createEventJournal, autoOffDiagnosis } = require('./diagnostics');
 const diagnosticJournal = createEventJournal();
 const { createTransitionRecorder, evaluateRevalidation } = require('./autoOffObservability');
 const { assessCompletion } = require('./completionAssessment');
+const { convertProcesses } = require('./processReplayExport');
 const autoOffTransitions = createTransitionRecorder(diagnosticJournal);
 const fs = require('node:fs');
 const path = require('node:path');
@@ -755,6 +756,15 @@ mqttClient.on('message', (topic, message) => {
 });
 
 // API Routes
+
+// Privacy-preserving, read-only export for offline completion validation.
+// All candidates are deliberately unlabeled; no real end-of-charge ground truth is inferred.
+app.get('/api/processes/replay-export', (req, res) => {
+  const { traces, skipped } = convertProcesses(chargingProcesses);
+  res.set('Cache-Control', 'no-store');
+  res.set('Content-Disposition', 'attachment; filename="chargebot-replay-candidates.json"');
+  res.json({ schemaVersion: 1, traces, skipped, requiresIndependentLabels: true });
+});
 
 // Get all charging processes
 app.get('/api/processes', (req, res) => {
