@@ -45,3 +45,20 @@
 .device-page button:focus-visible, .device-page select:focus-visible, .device-page input:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 2px; }
 .device-page .process-section-header { gap: 1rem; }
 .device-page .process-cleanup-controls { padding: .5rem; border-radius: 12px; background: var(--bg-secondary); }
+
+/* History maintenance is a secondary, explicitly destructive action. */
+.device-page .process-section-header h2 { margin: 0; }
+.cleanup-disclosure-button { border: 1px solid var(--border-secondary); background: var(--bg-secondary); color: var(--text-primary); padding: .65rem 1rem; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.cleanup-disclosure-button:hover { background: var(--bg-hover); }
+.cleanup-panel { margin: 1rem 0; border: 1px solid var(--border-primary); border-radius: 16px; background: var(--bg-secondary); padding: 1.25rem; }
+.cleanup-panel-heading h3 { margin: 0 0 .4rem; font-size: 1.05rem; }
+.cleanup-panel-heading p { margin: 0 0 1rem; color: var(--text-secondary); line-height: 1.5; max-width: 65ch; }
+.device-page .process-cleanup-controls { padding: 0; background: transparent; gap: .65rem; }
+.process-cleanup-controls label { font-weight: 600; }
+.process-cleanup-controls input { width: 5.5rem; padding: .45rem .65rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-secondary); }
+.cleanup-danger-button { background: #b42318; border: 1px solid #b42318; color: white; padding: .65rem 1rem; font-weight: 700; cursor: pointer; }
+.cleanup-danger-button:hover:not(:disabled) { background: #912018; }
+.cleanup-danger-button:disabled { opacity: .55; cursor: not-allowed; }
+.cleanup-cancel-button { border: 1px solid var(--border-secondary); background: transparent; color: var(--text-primary); padding: .65rem 1rem; cursor: pointer; }
+.process-cleanup-message { padding: .75rem 1rem; border-radius: 10px; background: var(--bg-secondary); }
+@media(max-width:650px) { .process-section-header { align-items: flex-start; } .cleanup-panel { padding: 1rem; } .process-cleanup-controls { align-items: stretch; } .cleanup-danger-button, .cleanup-cancel-button { flex: 1; } }
