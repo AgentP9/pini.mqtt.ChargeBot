@@ -124,3 +124,15 @@
 .charts-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); }
 .chart-card { border-radius: 16px; border: 1px solid var(--border-primary); }
 .stats-summary .stat-card { border-radius: 16px; }
+
+.export-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
+.export-controls select { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-secondary); padding: .65rem; border-radius: 9px; }
+.export-controls span { color: var(--text-secondary); font-size: .85rem; }
+.export-session-picker { margin: .75rem 0 1.25rem; border: 1px solid var(--border-primary); border-radius: 12px; padding: .75rem; }
+.export-session-picker summary { cursor: pointer; font-weight: 600; }
+.export-picker-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .75rem 0; }
+.replay-export-panel .export-picker-actions button { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-secondary); padding: .5rem .75rem; min-height: 38px; }
+.export-session-list { display: grid; gap: .3rem; max-height: 240px; overflow: auto; }
+.export-session-list label { display: flex; align-items: center; gap: .75rem; padding: .45rem; border-radius: 8px; overflow-wrap: anywhere; }
+.export-session-list label:hover { background: var(--bg-tertiary); }
+.export-session-list input { width: 18px; height: 18px; flex-shrink: 0; }
