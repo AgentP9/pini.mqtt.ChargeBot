@@ -177,6 +177,7 @@ function DevicePage({
       return;
     }
 
+    if (!window.confirm(`Permanently delete completed sessions older than ${cleanupDays} days? This cannot be undone.`)) return;
     setCleanupBusy(true);
     try {
       const deletedCount = await onCleanupProcesses(cleanupDays);
