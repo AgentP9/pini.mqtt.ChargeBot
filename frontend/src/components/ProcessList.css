@@ -277,3 +277,18 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+
+/* Sprint 9: align session cards and icon actions with Charging. */
+.device-page .process-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.device-page .process-item { border: 1px solid var(--border-primary); background: var(--bg-secondary); border-radius: 14px; }
+.device-page .process-item.selected { border-color: var(--primary-color); box-shadow: 0 0 0 1px var(--primary-color); }
+.device-page .process-item:hover { box-shadow: 0 3px 12px rgba(0,0,0,.05); }
+.device-page .delete-button, .device-page .complete-button, .device-page .edit-button { min-width: 40px; min-height: 40px; border-radius: 10px; border: 1px solid transparent; }
+.device-page .delete-button { color: var(--status-error); }
+.device-page .delete-button:hover { background: var(--status-error-bg); transform: none; }
+.device-page .complete-button:hover, .device-page .edit-button:hover { transform: none; }
+.device-page .process-checkbox { accent-color: var(--primary-color); }
+.device-page .process-row { grid-template-columns: repeat(3,minmax(0,1fr)); gap: .5rem; }
+.device-page .process-cell { min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .device-page .charging-animation, .device-page .charging-bolt { animation: none; } }
