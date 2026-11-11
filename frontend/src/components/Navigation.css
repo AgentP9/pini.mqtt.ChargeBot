@@ -41,3 +41,11 @@
     font-size: 0.9rem;
   }
 }
+
+
+/* Responsive, consistent pill navigation. */
+.navigation { gap: .35rem; padding: .75rem max(1rem, calc((100vw - 1400px) / 2)); border-bottom: 1px solid var(--border-primary); box-shadow: none; flex-wrap: wrap; }
+.nav-link { padding: .7rem 1rem; border-radius: 999px; font-size: .92rem; min-height: 42px; }
+.nav-link.active { background: var(--primary-color); }
+.nav-link:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 2px; }
+@media(max-width:600px){.navigation { padding: .65rem; gap: .25rem; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); }.nav-link { padding: .65rem .2rem; font-size: .75rem; justify-content: center; text-align: center; }}

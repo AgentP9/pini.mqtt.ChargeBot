@@ -3,6 +3,7 @@ import axios from 'axios';
 import DeviceList from '../components/DeviceList';
 import ChargingChart from '../components/ChargingChart';
 import { formatDateTime } from '../utils/dateFormatter';
+import { calculateProcessEnergyWh } from '../utils/energy.mjs';
 import './ChargingPage.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -16,6 +17,7 @@ function ChargingPage({
   const [estimations, setEstimations] = useState({});
   const [guesses, setGuesses] = useState({});
   const [completionStatus, setCompletionStatus] = useState(null);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   // Get active (currently running) charging processes
   const activeProcesses = useMemo(() => {
@@ -190,9 +192,18 @@ function ChargingPage({
   };
 
   return (
-    <div className="charging-page">
-      <section className="card devices-section-full">
-        <h2>Connected Chargers</h2>
+    <div className="charging-page smart-dashboard">
+      <header className="dashboard-intro">
+        <div><p className="dashboard-eyebrow">CHARGEBOT · HOME</p><h2>Charging overview</h2><p>Everything important at a glance. Technical details when you need them.</p></div>
+        <button className="dashboard-details-toggle" type="button" aria-expanded={showTechnicalDetails} onClick={() => setShowTechnicalDetails(value => !value)}>{showTechnicalDetails ? 'Hide technical details' : 'Show technical details'}</button>
+      </header>
+      <section className="dashboard-summary" aria-label="Charging summary">
+        <article className="dashboard-metric"><span>Active sessions</span><strong>{activeProcesses.length}</strong><small>{activeProcesses.length ? 'Charging in progress' : 'All quiet'}</small></article>
+        <article className="dashboard-metric"><span>Current power</span><strong>{devices.reduce((total, d) => total + (Number.isFinite(d.power) && d.isOn ? Math.max(0, d.power) : 0), 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} <em>W</em></strong><small>Across connected chargers</small></article>
+        <article className="dashboard-metric"><span>Energy today</span><strong>{(processes.filter(p => p.startTime && new Date(p.startTime).toDateString() === new Date().toDateString()).reduce((total, p) => total + calculateProcessEnergyWh(p), 0) / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} <em>kWh</em></strong><small>Sessions started today · estimated</small></article>
+      </section>
+      <section className="card devices-section-full smart-devices">
+        <h2>My chargers</h2>
         <DeviceList 
           devices={devices}
           processes={processes}
@@ -204,12 +215,12 @@ function ChargingPage({
       </section>
 
       {activeProcesses.length > 0 && (
-        <section className="card chart-section">
+        <section className="card chart-section smart-chart">
           <div className="chart-header">
             <h2>
               {activeProcesses.length === 1 
-                ? `Current Charging - Process #${activeProcesses[0].id}`
-                : `Current Charging (${activeProcesses.length} active processes)`
+                ? `Live charging`
+                : `Live charging (${activeProcesses.length} sessions)`
               }
             </h2>
           </div>
@@ -222,8 +233,8 @@ function ChargingPage({
             const hasDeviceName = process.deviceName && process.deviceName.trim() !== '';
             
             return (
-              <div key={processId} className="process-info" style={{ marginBottom: activeProcesses.length > 1 ? '1.5rem' : '0' }}>
-                {activeProcesses.length > 1 && (
+              <div key={processId} className={`process-info ${showTechnicalDetails ? "" : "dashboard-compact-process"}`} style={{ marginBottom: activeProcesses.length > 1 ? '1.5rem' : '0' }}>
+                {showTechnicalDetails && activeProcesses.length > 1 && (
                   <div className="info-item">
                     <strong>Process:</strong> #{processId}
                   </div>
@@ -231,9 +242,9 @@ function ChargingPage({
                 <div className="info-item">
                   <strong>Charger:</strong> {process.chargerName || process.deviceName || process.chargerId || process.deviceId}
                 </div>
-                <div className="info-item">
+                {showTechnicalDetails && <div className="info-item">
                   <strong>Start:</strong> {formatDateTime(process.startTime)}
-                </div>
+                </div>}
                 {guess && !hasDeviceName && (
                   <div className="info-item guess-item">
                     <strong>Device Guess:</strong>{' '}

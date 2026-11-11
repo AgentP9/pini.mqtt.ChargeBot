@@ -177,6 +177,8 @@ function PatternManager({ patterns, selectedPatternId, onPatternUpdate, onSelect
                 <div className="pattern-actions">
                   <button
                     className="pattern-expand-btn"
+                    aria-label={isExpanded ? `Collapse ${displayName} details` : `Expand ${displayName} details`}
+                    aria-expanded={isExpanded}
                     onClick={(e) => {
                       e.stopPropagation(); // Prevent card selection when clicking expand
                       setExpandedPattern(isExpanded ? null : pattern.id);
@@ -187,6 +189,7 @@ function PatternManager({ patterns, selectedPatternId, onPatternUpdate, onSelect
                   </button>
                   <button
                     className="pattern-edit-btn"
+                    aria-label={`Edit ${displayName} device name`}
                     onClick={(e) => handleEditPattern(e, pattern)}
                     title="Edit device name"
                   >
@@ -194,6 +197,7 @@ function PatternManager({ patterns, selectedPatternId, onPatternUpdate, onSelect
                   </button>
                   <button
                     className="pattern-delete-btn"
+                    aria-label={`Delete ${displayName} recognition pattern`}
                     onClick={(e) => {
                       e.stopPropagation(); // Prevent card selection when clicking delete
                       handleDeletePattern(pattern.id, pattern.deviceName || displayName);

@@ -118,3 +118,13 @@
     font-size: 1rem;
   }
 }
+
+
+/* Unified application shell, shared with the Charging dashboard. */
+.app-header { padding: 1.25rem 5.5rem; text-align: left; box-shadow: none; border-bottom: 1px solid var(--border-primary); }
+.app-header h1 { margin: 0; font-size: clamp(1.2rem, 2vw, 1.65rem); letter-spacing: -.025em; }
+.version-badge { top: 50%; left: auto; right: 5.5rem; transform: translateY(-50%); border-radius: 999px; }
+.theme-toggle { top: 50%; right: 1rem; transform: translateY(-50%); border-radius: 12px; }
+.theme-toggle:hover { transform: translateY(-50%); }
+.theme-toggle:active { transform: translateY(-50%) scale(.97); }
+@media(max-width:600px){.app-header { padding: 1.2rem 3.8rem 1.2rem 1rem; }.app-header h1 { font-size: 1.2rem; }.version-badge { display: none; }.theme-toggle { top: 50%; right: .65rem; }}

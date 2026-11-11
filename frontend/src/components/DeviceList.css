@@ -508,3 +508,28 @@
 .cancel-selector-button:active {
   transform: translateY(0);
 }
+
+/* Sprint 9: quiet smart-home device cards; controls remain explicit. */
+.smart-dashboard .device-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 1rem; }
+.smart-dashboard .device-item { min-width: 0; max-width: none; padding: 1.25rem; border-radius: 18px; background: var(--bg-secondary); box-shadow: 0 3px 14px rgba(0,0,0,.035); }
+.smart-dashboard .device-item.device-on { border-color: rgba(16,185,129,.45); background: var(--bg-secondary); }
+.smart-dashboard .device-item.device-completing { border-color: rgba(245,158,11,.5); background: var(--bg-secondary); }
+.smart-dashboard .device-item.device-on::before,
+.smart-dashboard .device-item.device-completing::before { display: none; }
+.smart-dashboard .device-header { gap: .75rem; align-items: flex-start; }
+.smart-dashboard .device-name { margin: 0; line-height: 1.35; font-size: 1.2rem; overflow-wrap: anywhere; }
+.smart-device-status { display: inline-flex; align-items: center; gap: .45rem; margin-bottom: .75rem; font-size: .78rem; font-weight: 650; color: var(--text-secondary); }
+.smart-status-dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; background: #94a3b8; }
+.smart-status-dot.active { background: #10b981; }
+.smart-status-dot.completing { background: #f59e0b; }
+.smart-dashboard .device-details { gap: .75rem; }
+.smart-dashboard .detail-row { align-items: baseline; gap: 1rem; }
+.smart-dashboard .detail-value { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.smart-dashboard .device-details > .detail-row:first-child .detail-value { font-size: 1.45rem; font-weight: 750; }
+.smart-dashboard .device-actions { margin-top: 1rem; }
+.smart-dashboard .auto-off-button { min-height: 42px; border-radius: 10px; }
+.smart-dashboard .toggle-switch:focus-visible,
+.smart-dashboard .auto-off-button:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .smart-dashboard .device-item, .smart-dashboard .toggle-switch { transition: none; }
+}

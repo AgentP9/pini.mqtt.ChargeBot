@@ -20,6 +20,8 @@ function DevicePage({
   const [selectedPatternId, setSelectedPatternId] = useState(null);
   const [cleanupDays, setCleanupDays] = useState(90);
   const [cleanupMessage, setCleanupMessage] = useState('');
+  const [cleanupPending, setCleanupPending] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const [filters, setFilters] = useState({
     state: 'all',
     charger: 'all',
@@ -170,14 +172,13 @@ function DevicePage({
   };
 
   const handleCleanupProcesses = async () => {
+    if (cleanupBusy) return;
     if (!Number.isInteger(cleanupDays) || cleanupDays < 1 || cleanupDays > 36500) {
       return;
     }
 
-    if (!window.confirm(`Delete completed charging processes older than ${cleanupDays} days? Active processes and device recognition patterns will be kept.`)) {
-      return;
-    }
-
+    if (!window.confirm(`Permanently delete completed sessions older than ${cleanupDays} days? This cannot be undone.`)) return;
+    setCleanupBusy(true);
     try {
       const deletedCount = await onCleanupProcesses(cleanupDays);
       setSelectedProcesses([]);
@@ -185,6 +186,9 @@ function DevicePage({
     } catch (error) {
       console.error('Error cleaning up charging processes:', error);
       setCleanupMessage('Failed to clean up charging processes. Please try again.');
+    } finally {
+      setCleanupBusy(false);
+      setCleanupPending(false);
     }
   };
 
@@ -204,29 +208,20 @@ function DevicePage({
         <section className="card processes-section">
           <div className="process-section-header">
             <h2>Device Charging Processes</h2>
-            <div className="process-cleanup-controls">
-              <label htmlFor="cleanup-days">Delete completed processes older than</label>
-              <input
-                id="cleanup-days"
-                type="number"
-                min="1"
-                max="36500"
-                value={cleanupDays}
-                onChange={event => {
-                  setCleanupDays(Number(event.target.value));
-                  setCleanupMessage('');
-                }}
-              />
-              <span>days</span>
-              <button
-                type="button"
-                onClick={handleCleanupProcesses}
-                disabled={!Number.isInteger(cleanupDays) || cleanupDays < 1 || cleanupDays > 36500}
-              >
-                Cleanup
-              </button>
-            </div>
+            <button type="button" className="cleanup-disclosure-button" aria-expanded={cleanupPending} onClick={() => { setCleanupPending(v => !v); setCleanupMessage(''); }}>
+              {cleanupPending ? 'Close cleanup' : 'Manage history'}
+            </button>
           </div>
+          {cleanupPending && <div className="cleanup-panel">
+            <div className="cleanup-panel-heading"><h3>Delete old charging history</h3><p>This permanently removes completed sessions older than the chosen age. Active sessions and device recognition patterns are preserved.</p></div>
+            <div className="process-cleanup-controls">
+              <label htmlFor="cleanup-days">Older than</label>
+              <input id="cleanup-days" type="number" min="1" max="36500" value={cleanupDays} disabled={cleanupBusy} onChange={event => { setCleanupDays(Number(event.target.value)); setCleanupMessage(''); }} />
+              <span>days</span>
+              <button type="button" className="cleanup-danger-button" onClick={handleCleanupProcesses} disabled={cleanupBusy || !Number.isInteger(cleanupDays) || cleanupDays < 1 || cleanupDays > 36500}>{cleanupBusy ? 'Deleting…' : 'Delete old sessions'}</button>
+              <button type="button" className="cleanup-cancel-button" disabled={cleanupBusy} onClick={() => setCleanupPending(false)}>Cancel</button>
+            </div>
+          </div>}
           {cleanupMessage && <p className="process-cleanup-message" role="status">{cleanupMessage}</p>}
           <div className="filters-and-select-container">
             <ProcessFilters 
