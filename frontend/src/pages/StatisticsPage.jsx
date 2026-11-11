@@ -1,10 +1,43 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import axios from 'axios';
 import { BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatDateTime } from '../utils/dateFormatter';
 import { calculateProcessEnergyWh } from '../utils/energy.mjs';
 import './StatisticsPage.css';
 
 function StatisticsPage({ processes, patterns, devices }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportSummary, setExportSummary] = useState('');
+
+  const downloadReplayExport = async () => {
+    setExporting(true);
+    setExportError('');
+    setExportSummary('');
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL || '/api'}/processes/replay-export`, { timeout: 30000 });
+      const { traces, skipped } = response.data;
+      if (!Array.isArray(traces)) throw new Error('Unexpected export response');
+      const blob = new Blob([JSON.stringify(traces, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'chargebot-replay-candidates.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      setExportSummary(`${traces.length} anonymized candidates exported; ${Object.values(skipped || {}).reduce((a, b) => a + b, 0)} skipped. Independent labels are required before validation.`);
+    } catch (error) {
+      setExportError(error.response?.data?.error || error.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Calculate statistics from processes and patterns
   const statistics = useMemo(() => {
     // Total processes
@@ -113,6 +146,15 @@ function StatisticsPage({ processes, patterns, devices }) {
   return (
     <div className="statistics-page">
       <h2 className="page-title">📊 Charging Statistics</h2>
+      <section className="replay-export-panel" aria-label="Charging history export">
+        <h3>Completion validation export</h3>
+        <p>Download anonymized charging power histories for offline validation (Sprint 7). Device names and IDs are removed and timestamps are shifted. Completed sessions are not automatically considered fully charged.</p>
+        <button type="button" disabled={exporting} onClick={downloadReplayExport}>
+          {exporting ? 'Preparing export…' : 'Export anonymized replay JSON'}
+        </button>
+        {exportSummary && <p role="status">{exportSummary}</p>}
+        {exportError && <p role="alert">Export failed: {exportError}</p>}
+      </section>
       
       {/* Summary Cards */}
       <div className="stats-summary">
