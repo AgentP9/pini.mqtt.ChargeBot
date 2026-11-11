@@ -6,6 +6,7 @@ const storage = require('./storage');
 const { createEventJournal, autoOffDiagnosis } = require('./diagnostics');
 const diagnosticJournal = createEventJournal();
 const { createTransitionRecorder, evaluateRevalidation } = require('./autoOffObservability');
+const { assessCompletion } = require('./completionAssessment');
 const autoOffTransitions = createTransitionRecorder(diagnosticJournal);
 const fs = require('node:fs');
 const path = require('node:path');
@@ -1189,6 +1190,18 @@ app.get('/api/chargers/:chargerId/auto-off/status', (req, res) => {
     completionDetected: completionDetected,
     timeUntilShutoffSeconds: timeUntilShutoff
   });
+});
+
+// Sprint 6: explain completion evidence without altering auto-off behavior.
+app.get('/api/chargers/:chargerId/completion-assessment', (req, res) => {
+  const state = chargerStates[req.params.chargerId];
+  if (!state) return res.status(404).json({ error: 'Charger not found' });
+  const activeProcess = chargingProcesses.find(p => p.id === state.currentProcessId);
+  const assessment = assessCompletion(activeProcess);
+  const legacyReady = activeProcess ? patternAnalyzer.isInCompletionPhase(activeProcess) : false;
+  res.json({ chargerId: req.params.chargerId, processId: activeProcess?.id ?? null,
+    assessment, comparison: { legacyReady, assessmentReady: assessment.ready,
+      agrees: legacyReady === assessment.ready }, advisoryOnly: true });
 });
 
 // Diagnostic endpoints: bounded in-memory journal, no MQTT credentials or raw payloads.

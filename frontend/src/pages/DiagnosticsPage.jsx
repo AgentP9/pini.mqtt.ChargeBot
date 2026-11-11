@@ -17,6 +17,7 @@ const formatTime = value => value ? new Date(value).toLocaleString() : '—';
 export default function DiagnosticsPage() {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
+  const [completion, setCompletion] = useState({});
   const [filter, setFilter] = useState('');
   const [error, setError] = useState('');
   const [updated, setUpdated] = useState(null);
@@ -28,6 +29,11 @@ export default function DiagnosticsPage() {
       ]);
       setStatus(statusResponse.data);
       setEvents(eventResponse.data.events || []);
+      const chargers = statusResponse.data.chargers || [];
+      const results = await Promise.allSettled(chargers.map(charger =>
+        axios.get(`${API_URL}/chargers/${encodeURIComponent(charger.id)}/completion-assessment`)));
+      setCompletion(Object.fromEntries(chargers.map((charger, index) =>
+        [charger.id, results[index].status === 'fulfilled' ? results[index].value.data : null])));
       setUpdated(new Date());
       setError('');
     } catch (err) {
@@ -72,6 +78,11 @@ export default function DiagnosticsPage() {
             <p>Relay: {charger.relayConfirmed ? (charger.isOn ? 'ON (confirmed)' : 'OFF (confirmed)') : 'Unconfirmed'}</p>
             <p>Session: {charger.processId ?? 'None'}</p>
             <p>Auto-off: {LABELS[charger.autoOff.reason] || charger.autoOff.reason}</p>
+            {completion[charger.id] && <div className="diagnostics-assessment">
+              <p>Completion evidence: {completion[charger.id].assessment.reason.replaceAll('_', ' ')}</p>
+              <p>Detector comparison: {completion[charger.id].comparison.agrees ? 'Agrees' : 'Differs'} (existing: {completion[charger.id].comparison.legacyReady ? 'ready' : 'not ready'}, advisory: {completion[charger.id].assessment.ready ? 'ready' : 'not ready'})</p>
+              <small>Advisory only — does not control auto-off</small>
+            </div>}
             {charger.autoOff.sampleAgeMs != null && <p>Last sample age: {Math.round(charger.autoOff.sampleAgeMs / 1000)}s</p>}
           </article>
         )) : <p>No charger state available.</p>}
